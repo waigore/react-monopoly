@@ -1,0 +1,28 @@
+{
+  "name": "react-monopoly-api",
+  "version": "1.0.0",
+  "description": "node.js backend for Monopoly game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "archiver": "^2.1.1",
+    "bluebird": "^3.5.1",
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "fs-extra": "^5.0.0",
+    "moment": "^2.20.1",
+    "morgan": "^1.9.0",
+    "request": "^2.83.0",
+    "request-promise": "^4.2.2",
+    "sequelize": "^4.33.1",
+    "sqlite3": "^4.0.2",
+    "system-sleep": "^1.3.6",
+    "threads": "^0.10.1",
+    "winston": "^3.0.0"
+  }
+}
