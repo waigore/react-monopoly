@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import {Switch, Route, Redirect, withRouter} from 'react-router-dom';
 import './App.css';
 
-//import AppNavbar from './components/AppNavbar';
+import SimpleAppBar from './components/SimpleAppBar';
 import MainView from './views/MainView';
 
 class App extends Component {
@@ -14,6 +14,7 @@ class App extends Component {
   render() {
     return (
       <div>
+        <SimpleAppBar />
         <div style={{padding: "0.5em"}} />
           <Switch>
             <Route exact path="/all" render={() =>

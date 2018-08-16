@@ -21,22 +21,30 @@ const styles = {
   },
 };
 
-function SimpleAppBar(props) {
-  const { classes } = props;
-  return (
-    <div className={classes.root}>
-      <AppBar position="static">
-        <Toolbar>
-          <IconButton className={classes.menuButton} color="inherit" aria-label="Menu">
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="title" color="inherit" className={classes.flex}>
-            Monopoly
-          </Typography>
-        </Toolbar>
-      </AppBar>
-    </div>
-  );
+class SimpleAppBar extends React.Component {
+
+  constructor(props) {
+    super(props);
+
+  }
+
+  render() {
+    const { classes } = this.props;
+    return (
+      <div className={classes.root}>
+        <AppBar position="static">
+          <Toolbar>
+            <IconButton className={classes.menuButton} color="inherit" aria-label="Menu">
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="title" color="inherit" className={classes.flex}>
+              Monopoly
+            </Typography>
+          </Toolbar>
+        </AppBar>
+      </div>
+    );
+  }
 }
 
 SimpleAppBar.propTypes = {

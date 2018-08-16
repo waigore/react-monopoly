@@ -4,8 +4,6 @@ import { bindActionCreators } from 'redux';
 
 import Button from '@material-ui/core/Button';
 
-import SimpleAppBar from '../components/SimpleAppBar';
-
 class MainView extends Component {
   constructor(props) {
     super(props)
@@ -24,7 +22,6 @@ class MainView extends Component {
   render() {
     return (
       <div>
-        <SimpleAppBar />
         <Button variant="raised" color="primary">
           Hello World
         </Button>
