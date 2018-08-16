@@ -15,14 +15,12 @@ class App extends Component {
     return (
       <div>
         <div style={{padding: "0.5em"}} />
-        <Container fluid>
           <Switch>
             <Route exact path="/all" render={() =>
               <MainView viewType="all" />
             }/>
             <Redirect from="/" to="/all"/>
           </Switch>
-        </Container>
       </div>
     );
   }
