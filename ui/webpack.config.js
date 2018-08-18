@@ -18,7 +18,8 @@ module.exports = {
                 exclude: /node_modules/,
                 query:
                   {
-                    presets:['react']
+                    presets:['env', 'react'],
+                    plugins: ["transform-class-properties"]
                   }
             },
             {

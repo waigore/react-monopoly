@@ -4,6 +4,7 @@ import './App.css';
 
 import SimpleAppBar from './components/SimpleAppBar';
 import MainView from './views/MainView';
+import GameView from './views/GameView';
 
 class App extends Component {
 
@@ -18,7 +19,10 @@ class App extends Component {
         <div style={{padding: "0.5em"}} />
           <Switch>
             <Route exact path="/all" render={() =>
-              <MainView viewType="all" />
+              <MainView />
+            }/>
+            <Route exact path="/game" render={() =>
+              <GameView />
             }/>
             <Redirect from="/" to="/all"/>
           </Switch>
