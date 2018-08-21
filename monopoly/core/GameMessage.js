@@ -1,9 +1,11 @@
 import { Enum } from 'enumify';
 
-class GameMessage extends Enum {}
-GameMessage.initEnum([
+class GameMessageType extends Enum {}
+GameMessageType.initEnum([
   'EVENT',
   'HUMAN_INPUT_REQUIRED'
 ])
 
-export default GameMessage;
+export {
+  GameMessageType
+};

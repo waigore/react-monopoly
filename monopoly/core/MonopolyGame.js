@@ -27,6 +27,14 @@ GameState.initEnum([
   'OVER'
 ])
 
+class TurnPhase extends Enum {}
+TurnPhase.initEnum([
+  'PRE_ROLL',
+  'ROLL',
+  'POST_ROLL',
+  'AUCTION'
+])
+
 const MAX_DOUBLE_ROLLS = 3;
 const MAX_JAIL_TURNS = 3;
 
@@ -167,6 +175,13 @@ export class MonopolyGame {
 
   }
 
+  setupGame() {
+    this.determinePlayerOrder();
+
+    this.currentPlayerIndex = 0;
+    this.gameState = GameState.READY;
+  }
+
   determinePlayerOrder() {
     this.ingamePlayers.forEach(player => {
       let {die1, die2} = this.rollDice();
@@ -176,11 +191,59 @@ export class MonopolyGame {
     });
 
     this.ingamePlayers.sort((p1, p2) => -(p1.rollSequence-p2.rollSequence));
-    this.currentPlayerIndex = 0;
-    this.gameState = GameState.READY;
   }
 
-  * run() {
+  startGame() {
+    if (this.gameState != GameState.READY) {
+      throw new InvalidGameStateError('Game is not ready to be started yet!');
+    }
+
+    this.gameState = GameState.RUNNING;
+    this.currentPhase = TurnPhase.PRE_ROLL;
+    this.playerTurnData = {
+      turnEnded: false
+    };
+  }
+
+  preRollPhase() {
+    let player = this.ingamePlayers[this.currentPlayerIndex];
+    
+  }
+
+  run() {
+    switch (this.currentPhase) {
+      case TurnPhase.PRE_ROLL:
+        this.preRollPhase();
+      break;
+      case TurnPhase.ROLL:
+        this.rollPhase();
+      break;
+      case TurnPhase.POST_ROLL:
+        this.postRollPhase();
+      break;
+      case TurnPhase.AUCTION:
+        this.rollPhase();
+      break;
+    }
+
+    if (this.playerTurnData.turnEnded) {
+      this.currentPlayerIndex++;
+      if (this.currentPlayerIndex >= this.ingamePlayers.length) {
+        this.currentPlayerIndex = 0;
+      }
+
+      this.playerTurnData = Object.assign(
+        {},
+        { turnEnded: false }
+      );
+    }
+  }
+
+  nextPlayer() {
+
+  }
+
+  * run_old() {
     if (this.gameState != GameState.READY) {
       throw new InvalidGameStateError('Game is not ready to be started yet!');
     }
