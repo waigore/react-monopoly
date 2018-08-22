@@ -46,6 +46,21 @@ class BoardTile {
     this.ownable = ownable;
   }
 
+  isBuyable() {
+    return [
+      BoardTileType.PROPERTY,
+      BoardTileType.RAILROAD,
+      BoardTileType.UTILITY
+    ].includes(this.type);
+  }
+
+  isMortgageable() {
+    return [
+      BoardTileType.PROPERTY,
+      BoardTileType.RAILROAD,
+      BoardTileType.UTILITY
+    ].includes(this.type);
+  }
 }
 
 function PropertyTile({...args}) {

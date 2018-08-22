@@ -24,8 +24,8 @@ class PlayerAI {
     }
   }
 
-  preRoll(game, player) {
-    this.aiModule.preRoll(game, player);
+  considerPreRoll(game, player) {
+    this.aiModule.considerPreRoll(game, player);
   }
 
   roll(game, player) {

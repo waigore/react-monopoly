@@ -4,6 +4,7 @@ import tileData from './BoardData';
 import { GameMessage } from './GameMessage';
 import { BoardTileType } from './BoardTile';
 import { PlayerType, Player } from './Player';
+import { PlayerAction } from './PlayerAction';
 
 class InvalidBoardConfigError extends Error {
   constructor(msg) {
@@ -16,6 +17,13 @@ class InvalidGameStateError extends Error {
   constructor(msg) {
     super(msg);
     this.name = 'InvalidGameStateError';
+  }
+}
+
+class InvalidMoveError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = 'InvalidMoveError';
   }
 }
 
@@ -37,6 +45,7 @@ TurnPhase.initEnum([
 
 const MAX_DOUBLE_ROLLS = 3;
 const MAX_JAIL_TURNS = 3;
+const JAIL_FINE = 50;
 
 export class MonopolyGame {
   constructor({players}) {
@@ -51,6 +60,7 @@ export class MonopolyGame {
           id: listIndex + "-" + tileIndex,
           pos: { list: listIndex, seq: tileIndex },
           info: tile,
+          mortgaged: false,
           houses: 0,
           hotels: 0,
           ownedPlayerId: null
@@ -67,6 +77,7 @@ export class MonopolyGame {
         rollSequence: 0,
         inJail: false,
         inJailTurns: 0,
+        getOutOfJailCard: false
         money: 1500
       })
     });
@@ -83,6 +94,70 @@ export class MonopolyGame {
     return {die1, die2};
   }
 
+  mortgage(tileId) {
+    let tile = this.getTileById(tileId);
+    let player = this.getPlayerById(tile.ownedPlayerId);
+    if (!tile.info.isMortgageable())
+      {
+        throw new InvalidMoveError(tile.info.name + " cannot mortgage: is of type " + tile.info.type + "!");
+      }
+
+    if (tile.mortgaged) {
+      throw new InvalidMoveError(tile.info.name + " already mortgaged!")
+    }
+
+    if (tile.houses > 0 || tile.hotels > 0) {
+      throw new InvalidMoveError(tile.info.name + " cannot mortgage: is developed!");
+    }
+
+    let mortgage = tile.info.mortgage;
+    player.money += mortgage;
+    tile.mortgaged = true;
+  }
+
+  unmortgage(tileId) {
+    let tile = this.getTileById(tileId);
+    if (!tile.info.isMortgageable())
+    {
+      throw new InvalidMoveError(tile.info.name + " cannot unmortgage: is of type " + tile.info.type + "!");
+    }
+    if (!tile.mortgaged) {
+      throw new InvalidMoveError(tile.info.name + " is not mortgaged!")
+    }
+
+    let mortgage = tile.info.mortgage;
+    if (player.money < mortgage) {
+      throw new InvalidMoveError(player.info.name + " does not have enough money to unmortgage tile!");
+    }
+
+    player.money -= mortgage;
+    tile.mortgaged = false;
+  }
+
+  buy(playerId, tileId) {
+    let tile = this.getTileById(tileId);
+    let player = this.getPlayerById(playerId);
+    if (!tile.info.isBuyable())
+    {
+      throw new InvalidMoveError(tile.info.name + " cannot mortgage: is of type " + tile.info.type + "!");
+    }
+
+    if (tile.ownedPlayerId != null) {
+      throw new InvalidMoveError(tile.info.name + " is owned by player " + this.getPlayerById(tile.ownedPlayerId).info.name + "!");
+    }
+
+    let price = tile.info.price;
+    if (player.money < price)
+    {
+      throw new InvalidMoveError(player.info.name + " does not have enough money for tile!");
+    }
+
+    player.money -= price;
+    tile.houses = 0;
+    tile.hotels = 0;
+    tile.ownedPlayerId = playerId;
+  }
+
   advancePlayer(playerId, pos) {
     let player = this.getPlayerById(playerId);
     let tile = this.getTilebyId(player.onTileId);
@@ -94,18 +169,26 @@ export class MonopolyGame {
     else {
       tileIndex = tileIndex + pos - this.board.length;
     }
-    player.onTileId = tileIndex;
+    player.onTileId = this.board[tileIndex].id;
+
+    let newTile = this.getTileById(player.onTileId);
+    if (newTile.info.type == BoardTileType.GO_TO_JAIL) {
+      this.gotoJail(playerId);
+    }
   }
 
-  advancePlayerToTile(playerId, tile) {
-    this.advancePlayer(playerId, this.getTileIndex(tile.id));
+  advancePlayerToTile(playerId, tileId) {
+    let player = this.getPlayerById(playerId);
+    let tile = this.getTileById(tileId);
+
+    player.onTileId = this.getTileIndex(tile.id);
   }
 
   goToJail(playerId) {
     let player = this.getPlayerById(playerId);
     player.inJail = true;
     player.inJailTurns = 0;
-    this.advancePlayerToTile(playerId, this.findTileByType(BoardTileType.GO_TO_JAIL));
+    this.advancePlayerToTile(playerId, this.findTileByType(BoardTileType.JAIL).id);
   }
 
   getTileIndex(tileId) {
@@ -122,7 +205,7 @@ export class MonopolyGame {
   }
 
   findTileByType(tileType) {
-    return this.board.filter(t => t.info.type == BoardTileType.JAIL)[0];
+    return this.board.filter(t => t.info.type == tileType)[0];
   }
 
   getPlayerById(playerId) {
@@ -201,19 +284,77 @@ export class MonopolyGame {
     this.gameState = GameState.RUNNING;
     this.currentPhase = TurnPhase.PRE_ROLL;
     this.playerTurnData = {
-      turnEnded: false
     };
+  }
+
+  preRollPossibleActions() {
+    let player = this.ingamePlayers[this.currentPlayerIndex];
+    let possibleActions = [
+      PlayerAction.ROLL,
+      PlayerAction.MORTGAGE,
+      PlayerAction.UNMORTGAGE,
+      PlayerAction.DEVELOP
+    ];
+    if (player.inJail) {
+      if (player.money >= JAIL_FINE) {
+          possibleActions.push(PlayerAction.PAY_JAIL_FINE);
+      }
+      if (player.getOutOfJailCard) {
+          possibleActions.push(PlayerAction.USE_JAIL_CARD);
+      }
+    }
+    return possibleActions;
   }
 
   preRollPhase() {
     let player = this.ingamePlayers[this.currentPlayerIndex];
-    
+    let possibleActions = this.preRollPossibleActions();
+
+    if (player.info.type == PlayerType.HUMAN) {
+      return {
+        phase: TurnPhase.PRE_ROLL,
+        message: GameMessageType.HUMAN_INPUT_REQUIRED,
+        player,
+        possibleActions
+      }
+    }
+    else {
+      let aiActions = player.ai.considerPreRoll(this, player);
+      aiActions.forEach(action => this.handleAction(action));
+      return {
+        phase: TurnPhase.ROLL,
+        message: GameMessageType.EVENT,
+        player
+      }
+    }
   }
 
-  run() {
+  handleAction(action) {
+
+  }
+
+  handleInput(input, possibleActions) {
+    let player = this.ingamePlayers[this.currentPlayerIndex];
+    let action = input.action;
+    if (!possibleActions.include(action)) {
+      raise InvalidMoveError('Move ' + action + ' is not possible for phase ' + this.currentPhase + '!');
+    }
+
+    switch (action) {
+      case PlayerAction.MORTGAGE:
+        let tileId = input.tileId;
+        this.mortgage(tileId);
+        break;
+    }
+  }
+
+  run(humanInput = null) {
+    let phaseOutput;
     switch (this.currentPhase) {
       case TurnPhase.PRE_ROLL:
-        this.preRollPhase();
+        phaseOutput = humanInput ?
+          this.handleInput(humanInput, this.preRollPossibleActions()) :
+          this.preRollPhase();
       break;
       case TurnPhase.ROLL:
         this.rollPhase();
@@ -226,16 +367,24 @@ export class MonopolyGame {
       break;
     }
 
-    if (this.playerTurnData.turnEnded) {
+
+    if (phaseOutput.endTurn) {
       this.currentPlayerIndex++;
       if (this.currentPlayerIndex >= this.ingamePlayers.length) {
         this.currentPlayerIndex = 0;
       }
 
+      this.currentPhase = TurnPhase.PRE_ROLL;
+
+      /*
       this.playerTurnData = Object.assign(
         {},
         { turnEnded: false }
       );
+      */
+    }
+    else if (phaseOutput.phase != this.currentPhase) {
+      this.currentPhase = phaseOutput.phase;
     }
   }
 
