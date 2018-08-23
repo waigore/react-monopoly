@@ -62,7 +62,6 @@ export class MonopolyGame {
           info: tile,
           mortgaged: false,
           houses: 0,
-          hotels: 0,
           ownedPlayerId: null
         });
       });
@@ -92,6 +91,83 @@ export class MonopolyGame {
     let die2 = Math.floor(Math.random()*6)+1;
 
     return {die1, die2};
+  }
+
+  roll(playerId) {
+    let player = this.getPlayerById(playerId);
+    let {die1, die2} = this.rollDice();
+    if (player.inJail)
+    {
+      if (player.inJailTurns < MAX_JAIL_TURNS)
+      {
+        if (die1 == die2)
+        {
+          //player is out of jail! yay!
+          player.inJail = false;
+          player.inJailTurns = 0;
+        }
+        else
+        {
+          //player stays in jail. Boo...
+          player.inJailTurns++;
+        }
+      }
+
+      if (player.inJailTurns >= MAX_JAIL_TURNS)
+      {
+        //player has been in jail for at least 3 turns. Make them pay a fine
+        //and force them out
+        player.money -= JAIL_FINE;
+        player.inJail = false;
+        player.inJailTurns = 0;
+      }
+    }
+
+    if (!player.inJail)
+    {
+      this.advancePlayer(player.id, die1+die2);
+
+      let newTile = this.getTileById(player.ontileId);
+      if (newTile.ownedPlayerId == null && newTile.info.isBuyable())
+      {
+        return {
+          tileId: newTile.id,
+          possibleActions: [PlayerAction.BUY, PlayerAction.AUCTION]
+        };
+      }
+      else if (newTile.ownedPlayerId != null && newTile.ownedPlayerId != player.id)
+      {
+        //player owes rent
+        let rent = newTile.info.calculateRent(newTile.houses);
+        let ownedPlayer = this.getPlayerById(newTile.ownedPlayerId);
+        if (player.money >= rent)
+        {
+          player.money -= rent;
+          ownedPlayer.money += rent;
+
+          return {
+            tileId: newTile.id,
+            possibleActions: [PlayerAction.NEXT_PHASE]
+          }
+        }
+        else
+        {
+          //NOTE: the player should be allowed to trade away their properties
+          //to pay rent, but this is a little too complex to take on now...
+          return {
+            tileId: newTile.id,
+            possibleActions: [PlayerAction.FORFEIT]
+          }
+        }
+      }
+    }
+    else
+    {
+      return {
+        tileId: newTile.id,
+        possibleActions: [PlayerAction.NEXT_PHASE]
+      }
+    }
   }
 
   mortgage(playerId, tileId) {
@@ -308,6 +384,8 @@ export class MonopolyGame {
     this.gameState = GameState.RUNNING;
     this.currentPhase = TurnPhase.PRE_ROLL;
     this.playerTurnData = {
+      hasRolled: false,
+      doubleRolls: 0
     };
   }
 
@@ -403,6 +481,9 @@ export class MonopolyGame {
         let tileId = input.tileId;
         this.buy(player.id, tileId);
         break;
+      case PlayerAction.ROLL:
+        this.roll(player.id);
+        break;
       case PlayerAction.NEXT_PHASE:
         furtherInputRequired = false;
         break;
@@ -457,6 +538,8 @@ export class MonopolyGame {
         this.currentPhase = nextPhase;
       }
     }
+
+    return phaseOutput;
   }
 
   nextPlayer() {

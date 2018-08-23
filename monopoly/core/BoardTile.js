@@ -61,6 +61,11 @@ class BoardTile {
       BoardTileType.UTILITY
     ].includes(this.type);
   }
+
+  calculateRent(numHouses) //0-4, hotel = 5
+  {
+    return 10;
+  }
 }
 
 function PropertyTile({...args}) {
