@@ -94,13 +94,19 @@ export class MonopolyGame {
     return {die1, die2};
   }
 
-  mortgage(tileId) {
+  mortgage(playerId, tileId) {
     let tile = this.getTileById(tileId);
-    let player = this.getPlayerById(tile.ownedPlayerId);
     if (!tile.info.isMortgageable())
-      {
-        throw new InvalidMoveError(tile.info.name + " cannot mortgage: is of type " + tile.info.type + "!");
-      }
+    {
+      throw new InvalidMoveError(tile.info.name + " cannot mortgage: is of type " + tile.info.type + "!");
+    }
+
+    let player = this.getPlayerById(playerId);
+    let ownedPlayer = this.getPlayerById(tile.ownedPlayerId);
+    if (playerId != tile.ownedPlayerId)
+    {
+      throw new InvalidMoveError(tile.info.name + ": player " + player.info.name + " does not own tile!");
+    }
 
     if (tile.mortgaged) {
       throw new InvalidMoveError(tile.info.name + " already mortgaged!")
@@ -115,12 +121,20 @@ export class MonopolyGame {
     tile.mortgaged = true;
   }
 
-  unmortgage(tileId) {
+  unmortgage(playerId, tileId) {
     let tile = this.getTileById(tileId);
     if (!tile.info.isMortgageable())
     {
-      throw new InvalidMoveError(tile.info.name + " cannot unmortgage: is of type " + tile.info.type + "!");
+      throw new InvalidMoveError(tile.info.name + " cannot mortgage: is of type " + tile.info.type + "!");
     }
+
+    let player = this.getPlayerById(playerId);
+    let ownedPlayer = this.getPlayerById(tile.ownedPlayerId);
+    if (playerId != tile.ownedPlayerId)
+    {
+      throw new InvalidMoveError(tile.info.name + ": player " + player.info.name + " does not own tile!");
+    }
+
     if (!tile.mortgaged) {
       throw new InvalidMoveError(tile.info.name + " is not mortgaged!")
     }
@@ -254,8 +268,18 @@ export class MonopolyGame {
   }
   */
 
-  handleJailTimeInput(playerId, input) {
+  checkGetOutOfJailNeeded(playerId) {
+    let player = this.getPlayerById(playerId);
 
+    if (!player.inJail || player.inJailTurns < MAX_JAIL_TURNS) {
+      return;
+    }
+
+    //player has been in jail for at least 3 turns. Make them pay a fine
+    //and force them out
+    player.money -= JAIL_FINE;
+    player.inJail = false;
+    player.inJailTurns = 0;
   }
 
   setupGame() {
@@ -287,10 +311,18 @@ export class MonopolyGame {
     };
   }
 
+  possibleActionsForPhase(phase) {
+    switch (phase) {
+      case TurnPhase.PRE_ROLL:
+        return this.preRollPossibleActions();
+        break;
+    }
+  }
+
   preRollPossibleActions() {
     let player = this.ingamePlayers[this.currentPlayerIndex];
     let possibleActions = [
-      PlayerAction.ROLL,
+      PlayerAction.NEXT_PHASE,
       PlayerAction.MORTGAGE,
       PlayerAction.UNMORTGAGE,
       PlayerAction.DEVELOP
@@ -306,85 +338,124 @@ export class MonopolyGame {
     return possibleActions;
   }
 
-  preRollPhase() {
+  rollPossibleActions() {
+    let possibleActions = [
+      PlayerAction.ROLL
+    ];
+
+    return possibleActions;
+  }
+
+  processPhase() {
     let player = this.ingamePlayers[this.currentPlayerIndex];
-    let possibleActions = this.preRollPossibleActions();
+
+    /*
+    switch (this.currentPhase) {
+      case TurnPhase.PRE_ROLL:
+        this.checkGetOutOfJailNeeded(player.id);
+        break;
+    }*/
+
+    let possibleActions = this.possibleActionsForPhase(this.currentPhase);
 
     if (player.info.type == PlayerType.HUMAN) {
       return {
-        phase: TurnPhase.PRE_ROLL,
+        phase: this.currentPhase,
         message: GameMessageType.HUMAN_INPUT_REQUIRED,
         player,
         possibleActions
       }
     }
     else {
-      let aiActions = player.ai.considerPreRoll(this, player);
-      aiActions.forEach(action => this.handleAction(action));
+      let aiActions = player.ai.considerAction(this, player, this.currentPhase);
+      aiActions.forEach(action => this.handleAIAction(player.id, action));
       return {
-        phase: TurnPhase.ROLL,
-        message: GameMessageType.EVENT,
+        phase: this.currentPhase,
+        message: GameMessageType.PHASE_DONE,
         player
       }
     }
   }
 
-  handleAction(action) {
+  handleAIAction(playerId, action) {
 
   }
 
-  handleInput(input, possibleActions) {
-    let player = this.ingamePlayers[this.currentPlayerIndex];
+  handleHumanInput(playerId, input) {
+    let player = this.getPlayerById(playerId);
     let action = input.action;
+    let possibleActions = this.possibleActionsForPhase(this.currentPhase);
     if (!possibleActions.include(action)) {
       raise InvalidMoveError('Move ' + action + ' is not possible for phase ' + this.currentPhase + '!');
     }
+    let furtherInputRequired = true;
 
     switch (action) {
       case PlayerAction.MORTGAGE:
         let tileId = input.tileId;
-        this.mortgage(tileId);
+        this.mortgage(player.id, tileId);
         break;
+      case PlayerAction.UNMORTGAGE:
+        let tileId = input.tileId;
+        this.unmortgage(player.id, tileId);
+        break;
+      case PlayerAction.BUY:
+        let tileId = input.tileId;
+        this.buy(player.id, tileId);
+        break;
+      case PlayerAction.NEXT_PHASE:
+        furtherInputRequired = false;
+        break;
+    }
+
+    if (furtherInputRequired) {
+      return {
+        phase: this.currentPhase,
+        message: GameMessageType.HUMAN_INPUT_REQUIRED,
+        player,
+        possibleActions
+      }
+    }
+    else {
+      phase: this.currentPhase,
+      message: GameMessageType.PHASE_DONE,
+      player
     }
   }
 
   run(humanInput = null) {
     let phaseOutput;
-    switch (this.currentPhase) {
-      case TurnPhase.PRE_ROLL:
-        phaseOutput = humanInput ?
-          this.handleInput(humanInput, this.preRollPossibleActions()) :
-          this.preRollPhase();
-      break;
-      case TurnPhase.ROLL:
-        this.rollPhase();
-      break;
-      case TurnPhase.POST_ROLL:
-        this.postRollPhase();
-      break;
-      case TurnPhase.AUCTION:
-        this.rollPhase();
-      break;
-    }
+    let player = this.ingamePlayers[this.currentPlayerIndex];
+    let nextPhase = this.currentPhase;
 
+    phaseOutput = humanInput ?
+      this.handleHumanInput(playerId, humanInput) :
+      this.processPhase();
 
-    if (phaseOutput.endTurn) {
-      this.currentPlayerIndex++;
-      if (this.currentPlayerIndex >= this.ingamePlayers.length) {
-        this.currentPlayerIndex = 0;
+    if (phaseOutput.message == GameMessageType.PHASE_DONE) {
+      switch (this.currentPhase) {
+        case TurnPhase.PRE_ROLL:
+          nextPhase = TurnPhase.ROLL;
+        break;
+        case TurnPhase.ROLL:
+          nextPhase = TurnPhase.POST_ROLL;
+        break;
+        case TurnPhase.POST_ROLL:
+          nextPhase = null;
+        break;
       }
 
-      this.currentPhase = TurnPhase.PRE_ROLL;
+      if (nextPhase == null) {
+        this.currentPlayerIndex++;
+        if (this.currentPlayerIndex >= this.ingamePlayers.length) {
+          this.currentPlayerIndex = 0;
+        }
 
-      /*
-      this.playerTurnData = Object.assign(
-        {},
-        { turnEnded: false }
-      );
-      */
-    }
-    else if (phaseOutput.phase != this.currentPhase) {
-      this.currentPhase = phaseOutput.phase;
+        this.currentPhase = TurnPhase.PRE_ROLL;
+      }
+      else {
+        this.currentPhase = nextPhase;
+      }
     }
   }
 

@@ -2,7 +2,7 @@ import { Enum } from 'enumify';
 
 class GameMessageType extends Enum {}
 GameMessageType.initEnum([
-  'EVENT',
+  'PHASE_DONE',
   'HUMAN_INPUT_REQUIRED'
 ])
 

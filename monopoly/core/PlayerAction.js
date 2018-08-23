@@ -2,6 +2,7 @@ import { Enum } from 'enumify';
 
 class PlayerAction extends Enum {}
 PlayerAction.initEnum([
+  'NEXT_PHASE',
   'ROLL',
   'PAY_JAIL_FINE',
   'USE_JAIL_CARD',
@@ -14,6 +15,7 @@ PlayerAction.initEnum([
   'DEVELOP',
   'BUY',
   'AUCTION',
+  'END_TURN',
   'FORFEIT'
 ])
 
