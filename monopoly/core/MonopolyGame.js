@@ -1,4 +1,5 @@
 import { Enum } from 'enumify';
+import EventEmitter from 'wolfy87-eventemitter';
 
 import tileData from './BoardData';
 import { BoardTileType } from './BoardTile';
@@ -35,13 +36,29 @@ GameMessageType.initEnum([
   'AI_ACTION_PROCESSED'
 ]);
 
+class GameEventType extends Enum {}
+GameEventType.initEnum([
+  'GAME_READY',
+  'GAME_STARTED',
+  'GAME_ENDED',
+  'TURN_STARTED',
+  'TURN_ENDED',
+  'PHASE_STARTED',
+  'PHASE_ENDED',
+  'PLAYER_ACTION',
+  'PLAYER_ADVANCE',
+  'PLAYER_IN_JAIL',
+  'PLAYER_OUT_OF_JAIL',
+  'PLAYER_PAID_RENT'
+]);
+
 class GameState extends Enum {}
 GameState.initEnum([
   'INIT',
   'READY',
   'RUNNING',
   'OVER'
-])
+]);
 
 const MAX_DOUBLE_ROLLS = 3;
 const MAX_JAIL_TURNS = 3;
@@ -53,6 +70,7 @@ class MonopolyGame {
     this.ingamePlayers = [];
     this.currentPlayerIndex = -1;
     this.gameState = GameState.INIT;
+    this.ee = new EventEmitter();
 
     tileData.forEach((list, listIndex) => {
       list.forEach((tile, tileIndex) => {
@@ -86,6 +104,78 @@ class MonopolyGame {
     }
   }
 
+  addEventListener(eventName, callback) {
+    this.ee.addListener(eventName, callback);
+  }
+
+  removeEventListener(eventName, callback) {
+    this.ee.removeEventListener(eventName, callback);
+  }
+
+  emitEvent(eventName, args) {
+    this.ee.emitEvent(eventName, args);
+  }
+
+  emitGameReady() {
+    this.emitEvent(GameEventType.GAME_READY, null);
+  }
+
+  emitGameStarted() {
+    this.emitEvent(GameEventType.GAME_STARTED, null);
+  }
+
+  emitTurnStarted(playerId) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.TURN_STARTED, [{player}]);
+  }
+
+  emitTurnEnded(playerId) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.TURN_ENDED, [{player}]);
+  }
+
+  emitPhaseStarted(playerId, phase) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PHASE_STARTED, [{player, phase}]);
+  }
+
+  emitPhaseEnded(playerId, phase) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PHASE_ENDED, [{player, phase}]);
+  }
+
+  emitPlayerAction(playerId, action, args) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PLAYER_ACTION, [{player, action, ...args}]);
+  }
+
+  emitPlayerAdvance(playerId, tileId) {
+    let player = this.getPlayerById(playerId);
+    let tile = this.getTileById(tileId);
+    this.emitEvent(GameEventType.PLAYER_ADVANCE, [{player, tile}]);
+  }
+
+  /*
+  'PLAYER_IN_JAIL',
+  'PLAYER_OUT_OF_JAIL',
+  'PLAYER_PAID_RENT'
+  */
+  emitPlayerInJail(playerId, turns) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PLAYER_IN_JAIL, [{player, turns}]);
+  }
+
+  emitPlayerOutOfJail(playerId, method) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PLAYER_OUT_OF_JAIL, [{player, method}]);
+  }
+
+  emitPlayerPaidRent(playerId, tileId) {
+    let player = this.getPlayerById(playerId);
+    let tile = this.getTilebyId(tileId);
+    this.emitEvent(GameEventType.PLAYER_PAID_RENT, [{player, tile}]);
+  }
+
   rollDice() {
     let die1 = Math.floor(Math.random()*6)+1;
     let die2 = Math.floor(Math.random()*6)+1;
@@ -105,11 +195,13 @@ class MonopolyGame {
           //player is out of jail! yay!
           player.inJail = false;
           player.inJailTurns = 0;
+          this.emitPlayerOutOfJail(player.id, 'double roll');
         }
         else
         {
           //player stays in jail. Boo...
           player.inJailTurns++;
+          this.emitPlayerInJail(player.id, player.inJailTurns);
         }
       }
 
@@ -120,6 +212,7 @@ class MonopolyGame {
         player.money -= JAIL_FINE;
         player.inJail = false;
         player.inJailTurns = 0;
+        this.emitPlayerOutOfJail(player.id, MAX_JAIL_TURNS + ' turns up');
       }
     }
 
@@ -262,6 +355,8 @@ class MonopolyGame {
     player.onTileId = this.board[tileIndex].id;
     //console.log('new tile id for player:', player.info.name, ' ', player.onTileId);
 
+    this.emitPlayerAdvance(player.id, player.onTileId);
+
     let newTile = this.getTileById(player.onTileId);
     if (newTile.info.type == BoardTileType.GO_TO_JAIL) {
       this.gotoJail(playerId);
@@ -279,7 +374,9 @@ class MonopolyGame {
     let player = this.getPlayerById(playerId);
     player.inJail = true;
     player.inJailTurns = 0;
-    this.advancePlayerToTile(playerId, this.findTileByType(BoardTileType.JAIL).id);
+    let jailTile = this.findTileByType(BoardTileType.JAIL);
+    this.advancePlayerToTile(playerId, jailTile.id);
+    this.emitPlayerInJail(player.id, player.inJailTurns);
   }
 
   getTileIndex(tileId) {
@@ -364,6 +461,7 @@ class MonopolyGame {
 
     this.currentPlayerIndex = 0;
     this.gameState = GameState.READY;
+    this.emitGameReady();
   }
 
   determinePlayerOrder() {
@@ -388,6 +486,11 @@ class MonopolyGame {
       hasRolled: false,
       doubleRolls: 0
     };
+    this.emitGameStarted();
+
+    let currentPlayerId = this.ingamePlayers[this.currentPlayerIndex].id;
+    this.emitTurnStarted(currentPlayerId);
+    this.emitPhaseStarted(currentPlayerId, this.currentPhase);
   }
 
   possibleActionsForPhase(phase) {
@@ -565,7 +668,11 @@ class MonopolyGame {
         break;
       }
 
+      let oldPhase = this.currentPhase;
+      this.emitPhaseEnded(player.id, oldPhase);
+
       if (nextPhase == null) {
+        this.emitTurnEnded(player.id);
         this.currentPlayerIndex++;
         if (this.currentPlayerIndex >= this.ingamePlayers.length) {
           this.currentPlayerIndex = 0;
@@ -573,118 +680,19 @@ class MonopolyGame {
 
         this.currentPhase = TurnPhase.PRE_ROLL;
         phaseOutput.nextPhase = TurnPhase.PRE_ROLL;
+        let newPlayer = this.ingamePlayers[this.currentPlayerIndex];
+        this.emitTurnStarted(newPlayer.id);
       }
       else {
         this.currentPhase = nextPhase;
         phaseOutput.nextPhase = nextPhase;
       }
+
+      player = this.ingamePlayers[this.currentPlayerIndex];
+      this.emitPhaseStarted(player.id, this.currentPhase);
     }
 
     return phaseOutput;
-  }
-
-  nextPlayer() {
-
-  }
-
-  * run_old() {
-    if (this.gameState != GameState.READY) {
-      throw new InvalidGameStateError('Game is not ready to be started yet!');
-    }
-
-    while (this.gameState != GameState.OVER) {
-      let currentPlayer = this.ingamePlayers[this.currentPlayerIndex];
-      let currentPlayerInput;
-      /*
-      if (currentPlayer.type == PlayerType.AI) {
-         currentPlayer.ai.preRoll(this, currentPlayer);
-      }
-      else {
-        yield {
-          humanPlayerInput: 'PRE_ROLL',
-          currentPlayer
-        };
-      }
-      */
-
-      /* Check whether the player is in jail. If in jail the player can choose
-      to pay $50 to get out. However, if the player has been in jail for 3 turns
-      he must pay
-      NOTE: handle negative money!!
-       */
-      if (currentPlayer.inJail) {
-        currentPlayer.inJailTurns++;
-        if (currentPlayer.inJailTurns >= MAX_JAIL_TURNS) {
-          currentPlayer.money -= 50;
-          yield {
-            type: GameMessage.EVENT,
-            action: 'BAILED_OUT_OF_JAIL',
-            player: currentPlayer
-          };
-        }
-        else {
-          if (currentPlayer.type == Playertype.HUMAN) {
-             currentPlayerInput = yield {
-              type: GameMessage.HUMAN_INPUT_REQUIRED,
-              action: 'IN_JAIL',
-              player: currentPlayer
-            }
-          }
-          else {
-            currentPlayerInput = currentPlayer.ai.considerJailTime(this, currentPlayer);
-          }
-        }
-      }
-
-
-      if (currentPlayer.type == PlayerType.HUMAN) {
-        currentPlayerInput = yield {
-          type: GameMessage.HUMAN_INPUT_REQUIRED,
-          action: 'ROLL',
-          player: currentPlayer
-        }
-      } else {
-        currentPlayer.ai.roll(this, currentPlayer);
-      }
-
-      /* Dice rolls
-        Roll the dice for the current player. If player rolls doubles, roll again.
-        If player rolls three doubles in a row it's off to jail they go.
-      */
-      let doubleRolls = 0;
-      let anotherRollNeeded = true;
-      while (anotherRollNeeded) {
-        let {die1, die2} = this.rollDice();
-
-        if (currentPlayer.inJail && die1 == die2 || !currentPlayer.inJail) {
-          let origTile = this.getTileById(currentPlayer.onTileId);
-          this.advancePlayer(player, die1+die2);
-          let newTile = this.getTileById(currentPlayer.onTileId);
-
-          yield {
-            type: GameAction.EVENT,
-            message: 'PLAYER_ADVANCE',
-            diceRoll: {die1, die2},
-            origTile,
-            newTile
-          };
-        }
-
-
-
-        anotherRollNeeded = !currentPlayer.inJail && die1 == die2;
-        if (anotherRollNeeded) {
-          doubleRolls += 1;
-        }
-        if (doubleRolls >= MAX_DOUBLE_ROLLS) {
-          //Jail time!
-
-        }
-      }
-
-
-
-    }
   }
 }
 
@@ -694,6 +702,7 @@ export {
   InvalidGameStateError,
   InvalidBoardConfigError,
   GameMessageType,
+  GameEventType,
   GameState,
   TurnPhase,
   MonopolyGame

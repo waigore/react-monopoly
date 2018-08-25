@@ -1,4 +1,4 @@
-import { MonopolyGame } from './core/MonopolyGame';
+import { MonopolyGame, GameEventType } from './core/MonopolyGame';
 import { Player, PlayerType } from './core/Player';
 import { AILevel } from './ai/PlayerAI';
 
@@ -38,12 +38,39 @@ var game = new MonopolyGame({players});
 game.allPlayerNames = function() {
   return this.ingamePlayers.map(p => p.info.name);
 }
+game.addEventListener(GameEventType.GAME_READY, () => {
+  console.log('Game ready!');
+});
+game.addEventListener(GameEventType.GAME_STARTED, () => {
+  console.log('Game started, gamestate = ', game.gameState);
+  console.log('Players:', game.allPlayerNames());
+});
+game.addEventListener(GameEventType.TURN_STARTED, (args) => {
+  let {player} = args;
+  console.log('Turn started for player', player.info.name);
+});
+game.addEventListener(GameEventType.TURN_ENDED, (args) => {
+  let {player} = args;
+  console.log('Turn ended for player', player.info.name);
+});
+game.addEventListener(GameEventType.PHASE_STARTED, (args) => {
+  let {player, phase} = args;
+  console.log('Phase', phase.name, 'started for player', player.info.name);
+});
+game.addEventListener(GameEventType.PLAYER_ADVANCE, (args) => {
+  let {player, tile} = args;
+  console.log('Player', player.info.name, 'advances to tile', tile.info.name);
+});
+game.addEventListener(GameEventType.PLAYER_ACTION, (args) => {
+  let {player, action} = args;
+  if (action == PlayerAction.BUY) {
+    let {tile} = args;
+    console.log('Player', player.info.name, 'buys', tile.info.name);
+  }
+});
 
 game.setupGame();
 game.startGame();
-
-console.log('Game started, gamestate = ', game.gameState);
-console.log('Players:', game.allPlayerNames());
 
 var phaseOutput;
 
