@@ -1,32 +1,54 @@
-/*
-import http from 'http';
+import { MonopolyGame } from './core/MonopolyGame';
+import { Player, PlayerType } from './core/Player';
+import { AILevel } from './ai/PlayerAI';
 
-http.createServer((req, res) => {
-  res.writeHead(200, {'Content-Type': 'text/plain'});
-  res.end('Hello World\n');
-}).listen(1337, '127.0.0.1');
+Math.seed = function(s) {
+    return function() {
+        s = Math.sin(s) * 10000;
+        return s - Math.floor(s);
+    };
+};
+var random1 = Math.seed(42);
+var random2 = Math.seed(random1());
+Math.random = Math.seed(random2());
 
-console.log('Server running at http://127.0.0.1:1337/');
-*/
+var players = [
+  new Player({
+    name: 'Player 1',
+    type: PlayerType.HUMAN
+  }),
+  new Player({
+    name: 'Player 2',
+    type: PlayerType.AI,
+    level: AILevel.NONSENSICAL
+  }),
+  new Player({
+    name: 'Player 3',
+    type: PlayerType.AI,
+    level: AILevel.NONSENSICAL
+  }),
+  new Player({
+    name: 'Player 4',
+    type: PlayerType.HUMAN,
+    level: AILevel.NONSENSICAL
+  }),
+];
 
+var game = new MonopolyGame({players});
+game.allPlayerNames = function() {
+  return this.ingamePlayers.map(p => p.info.name);
+}
 
-import { PropertyColor, BoardTile, PropertyTile } from './core/BoardTile';
-import {MonopolyGame} from './core/MonopolyGame';
+game.setupGame();
+game.startGame();
 
-var m = new MonopolyGame({b:'b'});
-console.log(m.a, m.b);
+console.log('Game started, gamestate = ', game.gameState);
+console.log('Players:', game.allPlayerNames());
 
-var b = new BoardTile({name: 'Old Kent Road'});
-console.log(b.name);
+var phaseOutput;
 
-var c = PropertyColor.BROWN;
-console.log(c);
+phaseOutput = game.run();
+//console.log(phaseOutput); //player2, pre-roll
 
-
-var tile = PropertyTile({
-  name: 'Old Kent Road',
-  pos: {row: 1, seq: 1},
-  color: PropertyColor.BROWN
-});
-
-console.log(tile.name, tile.pos, tile.color);
+phaseOutput = game.run();
+console.log(phaseOutput);

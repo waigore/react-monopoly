@@ -38,95 +38,95 @@ const ukTileData = [
     ChanceTile({}),
     PropertyTile({
       name: 'Euston Road',
-      color: PropertColor.LIGHT_BLUE
+      color: PropertyColor.LIGHT_BLUE
     }),
     PropertyTile({
       name: 'Pentonville Road',
-      color: PropertColor.LIGHT_BLUE
+      color: PropertyColor.LIGHT_BLUE
     }),
   ],
   [
     JailTile({}),
     PropertyTile({
       name: 'Pall Mall',
-      color: PropertColor.PURPLE
+      color: PropertyColor.PURPLE
     }),
     UtilityTile({
       name: 'Electric Company'
     }),
     PropertyTile({
       name: 'Whitehall',
-      color: PropertColor.PURPLE
+      color: PropertyColor.PURPLE
     }),
     PropertyTile({
       name: 'Northumberland Road',
-      color: PropertColor.PURPLE
+      color: PropertyColor.PURPLE
     }),
     RailroadTile({
       name: 'Marylebone Station'
     }),
     PropertyTile({
       name: 'Bow Street',
-      color: PropertColor.ORANGE
+      color: PropertyColor.ORANGE
     }),
     CommChestTile({}),
     PropertyTile({
       name: 'Marlborough Street',
-      color: PropertColor.ORANGE
+      color: PropertyColor.ORANGE
     }),
     PropertyTile({
       name: 'Vine Street',
-      color: PropertColor.ORANGE
+      color: PropertyColor.ORANGE
     }),
   ],
   [
     FreeParkingTile({}),
     PropertyTile({
       name: 'The Strand',
-      color: PropertColor.RED
+      color: PropertyColor.RED
     }),
     ChanceTile({}),
     PropertyTile({
       name: 'Fleet Street',
-      color: PropertColor.RED
+      color: PropertyColor.RED
     }),
     PropertyTile({
       name: 'Trafalgar Square',
-      color: PropertColor.RED
+      color: PropertyColor.RED
     }),
     RailroadTile({
       name: 'Fenchurch St. Station'
     }),
     PropertyTile({
       name: 'Leicester Square',
-      color: PropertColor.YELLOW
+      color: PropertyColor.YELLOW
     }),
     PropertyTile({
       name: 'Coventry Street',
-      color: PropertColor.YELLOW
+      color: PropertyColor.YELLOW
     }),
     UtilityTile({
       name: 'Water Works'
     }),
     PropertyTile({
       name: 'Piccadilly',
-      color: PropertColor.YELLOW
+      color: PropertyColor.YELLOW
     }),
   ],
   [
     GoToJailTile({}),
     PropertyTile({
       name: 'Regent Street',
-      color: PropertColor.GREEN
+      color: PropertyColor.GREEN
     }),
     PropertyTile({
       name: 'Oxford Street',
-      color: PropertColor.GREEN
+      color: PropertyColor.GREEN
     }),
     CommChestTile({}),
     PropertyTile({
       name: 'Bond Street',
-      color: PropertColor.GREEN
+      color: PropertyColor.GREEN
     }),
     RailroadTile({
       name: 'Liverpool St. Station'
@@ -134,12 +134,12 @@ const ukTileData = [
     ChanceTile({}),
     PropertyTile({
       name: 'Park Lane',
-      color: PropertColor.DARK_BLUE
+      color: PropertyColor.DARK_BLUE
     }),
     SuperTaxTile({}),
     PropertyTile({
       name: 'Mayfair',
-      color: PropertColor.DARK_BLUE
+      color: PropertyColor.DARK_BLUE
     }),
   ]
 ]

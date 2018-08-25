@@ -9,7 +9,7 @@ PlayerType.initEnum([
 ])
 
 class Player {
-  constructor({name, type, level}) {
+  constructor({name, type, level = null}) {
     this.name = name;
     this.type = type;
     this.level = level;

@@ -1,3 +1,9 @@
+import { Enum } from 'enumify';
+
+import NonsensicalAI from './NonsensicalAI';
+import TurnPhase from '../core/TurnPhase';
+import PlayerAction from '../core/PlayerAction';
+
 class UnsupportedAIError extends Error {
   constructor(msg) {
     super(msg);
@@ -6,7 +12,7 @@ class UnsupportedAIError extends Error {
 }
 
 class AILevel extends Enum {}
-PlayerLevel.initEnum([
+AILevel.initEnum([
   'NONSENSICAL',
   'BASIC',
   'NORMAL'
@@ -16,7 +22,7 @@ class PlayerAI {
   constructor({level}) {
     this.level = level;
 
-    if (level == PlayerLevel.NONSENSICAL) {
+    if (level == AILevel.NONSENSICAL) {
       this.aiModule = new NonsensicalAI();
     }
     else {
@@ -24,17 +30,14 @@ class PlayerAI {
     }
   }
 
-  considerPreRoll(game, player) {
-    this.aiModule.considerPreRoll(game, player);
-  }
+  considerAction(game, player, currentPhase, possibleActions) {
+    if (currentPhase == TurnPhase.ROLL) {
+      return [{
+        action: PlayerAction.ROLL
+      }]
+    }
 
-  roll(game, player) {
-    //the AI always proceeds with the roll
-    return;
-  }
-
-  considerOffer(game, player1, player2, p1Offer, p2Offer) {
-    this.aiModule.considerOffer(game, player1, player2, p1Offer, p2Offer);
+    return this.aiModule.considerAction(game, player, currentPhase, possibleActions);
   }
 }
 

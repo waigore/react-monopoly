@@ -1,10 +1,11 @@
 import { Enum } from 'enumify';
 
 import tileData from './BoardData';
-import { GameMessage } from './GameMessage';
 import { BoardTileType } from './BoardTile';
 import { PlayerType, Player } from './Player';
-import { PlayerAction } from './PlayerAction';
+import PlayerAction from './PlayerAction';
+import TurnPhase from './TurnPhase';
+import { PlayerAI } from '../ai/PlayerAI';
 
 class InvalidBoardConfigError extends Error {
   constructor(msg) {
@@ -27,6 +28,13 @@ class InvalidMoveError extends Error {
   }
 }
 
+class GameMessageType extends Enum {}
+GameMessageType.initEnum([
+  'PHASE_DONE',
+  'HUMAN_INPUT_REQUIRED',
+  'AI_ACTION_PROCESSED'
+]);
+
 class GameState extends Enum {}
 GameState.initEnum([
   'INIT',
@@ -35,19 +43,11 @@ GameState.initEnum([
   'OVER'
 ])
 
-class TurnPhase extends Enum {}
-TurnPhase.initEnum([
-  'PRE_ROLL',
-  'ROLL',
-  'POST_ROLL',
-  'AUCTION'
-])
-
 const MAX_DOUBLE_ROLLS = 3;
 const MAX_JAIL_TURNS = 3;
 const JAIL_FINE = 50;
 
-export class MonopolyGame {
+class MonopolyGame {
   constructor({players}) {
     this.board = [];
     this.ingamePlayers = [];
@@ -68,15 +68,15 @@ export class MonopolyGame {
     });
 
     players.forEach((player, playerIndex) => {
-      ingamePlayers.push({
+      this.ingamePlayers.push({
         id: playerIndex,
         info: player,
-        ai: player.type == PlayerType.AI ? new PlayerAI(level) : null,
+        ai: player.type == PlayerType.AI ? new PlayerAI({level: player.level}) : null,
         onTileId: null,
         rollSequence: 0,
         inJail: false,
         inJailTurns: 0,
-        getOutOfJailCard: false
+        getOutOfJailCard: false,
         money: 1500
       })
     });
@@ -127,7 +127,7 @@ export class MonopolyGame {
     {
       this.advancePlayer(player.id, die1+die2);
 
-      let newTile = this.getTileById(player.ontileId);
+      let newTile = this.getTileById(player.onTileId);
       if (newTile.ownedPlayerId == null && newTile.info.isBuyable())
       {
         return {
@@ -250,7 +250,7 @@ export class MonopolyGame {
 
   advancePlayer(playerId, pos) {
     let player = this.getPlayerById(playerId);
-    let tile = this.getTilebyId(player.onTileId);
+    let tile = this.getTileById(player.onTileId);
     let tileIndex = this.getTileIndex(player.onTileId);
 
     if (tileIndex < this.board.length - 1) {
@@ -260,6 +260,7 @@ export class MonopolyGame {
       tileIndex = tileIndex + pos - this.board.length;
     }
     player.onTileId = this.board[tileIndex].id;
+    //console.log('new tile id for player:', player.info.name, ' ', player.onTileId);
 
     let newTile = this.getTileById(player.onTileId);
     if (newTile.info.type == BoardTileType.GO_TO_JAIL) {
@@ -286,11 +287,11 @@ export class MonopolyGame {
       if (tile.id == tileId) {
         return tileIndex;
       }
-    })
+    });
     return -1;
   }
 
-  getTilebyId(tileId) {
+  getTileById(tileId) {
     return this.board.filter(t => t.id == tileId)[0];
   }
 
@@ -394,6 +395,9 @@ export class MonopolyGame {
       case TurnPhase.PRE_ROLL:
         return this.preRollPossibleActions();
         break;
+      case TurnPhase.ROLL:
+        return this.rollPossibleActions();
+        break;
     }
   }
 
@@ -445,7 +449,7 @@ export class MonopolyGame {
       }
     }
     else {
-      let aiActions = player.ai.considerAction(this, player, this.currentPhase);
+      let aiActions = player.ai.considerAction(this, player, this.currentPhase, possibleActions);
       aiActions.forEach(action => this.handleAIAction(player.id, action));
       return {
         phase: this.currentPhase,
@@ -456,29 +460,62 @@ export class MonopolyGame {
   }
 
   handleAIAction(playerId, action) {
+    let player = this.getPlayerById(playerId);
+    let playerAction = action.action;
+    let possibleActions = this.possibleActionsForPhase(this.currentPhase);
+    if (!possibleActions.includes(playerAction)) {
+      throw new InvalidMoveError('Move ' + playerAction.name + ' is not possible for phase ' + this.currentPhase + '!');
+    }
+    let tileId;
 
+    switch (playerAction) {
+      case PlayerAction.MORTGAGE:
+        tileId = input.tileId;
+        this.mortgage(player.id, tileId);
+        break;
+      case PlayerAction.UNMORTGAGE:
+        tileId = input.tileId;
+        this.unmortgage(player.id, tileId);
+        break;
+      case PlayerAction.BUY:
+        tileId = input.tileId;
+        this.buy(player.id, tileId);
+        break;
+      case PlayerAction.ROLL:
+        this.roll(player.id);
+        break;
+      case PlayerAction.NEXT_PHASE:
+        break;
+    }
+
+    return {
+      phase: this.currentPhase,
+      message: GameMessageType.AI_ACTION_PROCESSED,
+      player
+    }
   }
 
   handleHumanInput(playerId, input) {
     let player = this.getPlayerById(playerId);
     let action = input.action;
     let possibleActions = this.possibleActionsForPhase(this.currentPhase);
-    if (!possibleActions.include(action)) {
-      raise InvalidMoveError('Move ' + action + ' is not possible for phase ' + this.currentPhase + '!');
+    if (!possibleActions.includes(action)) {
+      throw new InvalidMoveError('Move ' + action + ' is not possible for phase ' + this.currentPhase + '!');
     }
     let furtherInputRequired = true;
+    let tileId;
 
     switch (action) {
       case PlayerAction.MORTGAGE:
-        let tileId = input.tileId;
+        tileId = input.tileId;
         this.mortgage(player.id, tileId);
         break;
       case PlayerAction.UNMORTGAGE:
-        let tileId = input.tileId;
+        tileId = input.tileId;
         this.unmortgage(player.id, tileId);
         break;
       case PlayerAction.BUY:
-        let tileId = input.tileId;
+        tileId = input.tileId;
         this.buy(player.id, tileId);
         break;
       case PlayerAction.ROLL:
@@ -498,9 +535,11 @@ export class MonopolyGame {
       }
     }
     else {
-      phase: this.currentPhase,
-      message: GameMessageType.PHASE_DONE,
-      player
+      return {
+        phase: this.currentPhase,
+        message: GameMessageType.PHASE_DONE,
+        player
+      }
     }
   }
 
@@ -533,9 +572,11 @@ export class MonopolyGame {
         }
 
         this.currentPhase = TurnPhase.PRE_ROLL;
+        phaseOutput.nextPhase = TurnPhase.PRE_ROLL;
       }
       else {
         this.currentPhase = nextPhase;
+        phaseOutput.nextPhase = nextPhase;
       }
     }
 
@@ -645,4 +686,15 @@ export class MonopolyGame {
 
     }
   }
+}
+
+
+export {
+  InvalidMoveError,
+  InvalidGameStateError,
+  InvalidBoardConfigError,
+  GameMessageType,
+  GameState,
+  TurnPhase,
+  MonopolyGame
 }
