@@ -1,5 +1,6 @@
 import { MonopolyGame, GameEventType } from './core/MonopolyGame';
 import { Player, PlayerType } from './core/Player';
+import PlayerAction from './core/PlayerAction';
 import { AILevel } from './ai/PlayerAI';
 
 Math.seed = function(s) {
@@ -15,7 +16,8 @@ Math.random = Math.seed(random2());
 var players = [
   new Player({
     name: 'Player 1',
-    type: PlayerType.HUMAN
+    type: PlayerType.AI,
+    level: AILevel.NONSENSICAL
   }),
   new Player({
     name: 'Player 2',
@@ -29,7 +31,7 @@ var players = [
   }),
   new Player({
     name: 'Player 4',
-    type: PlayerType.HUMAN,
+    type: PlayerType.AI,
     level: AILevel.NONSENSICAL
   }),
 ];
@@ -47,7 +49,7 @@ game.addEventListener(GameEventType.GAME_STARTED, () => {
 });
 game.addEventListener(GameEventType.TURN_STARTED, (args) => {
   let {player} = args;
-  console.log('Turn started for player', player.info.name);
+  console.log('Turn started for player', player.info.name, ', on tile', game.getTileById(player.onTileId).info.name);
 });
 game.addEventListener(GameEventType.TURN_ENDED, (args) => {
   let {player} = args;
@@ -64,9 +66,17 @@ game.addEventListener(GameEventType.PLAYER_ADVANCE, (args) => {
 game.addEventListener(GameEventType.PLAYER_ACTION, (args) => {
   let {player, action} = args;
   if (action == PlayerAction.BUY) {
-    let {tile} = args;
-    console.log('Player', player.info.name, 'buys', tile.info.name);
+    let {tile, price} = args;
+    console.log('Player', player.info.name, 'buys', tile.info.name, 'for $', price);
   }
+});
+game.addEventListener(GameEventType.PLAYER_PAID_RENT, (args) => {
+  let {player, tile, rent} = args;
+  console.log('Player', player.info.name, 'paid rent $', rent, ' for a night\'s stay at', tile.info.name);
+});
+game.addEventListener(GameEventType.PLAYER_PAID_TAX, (args) => {
+  let {player, taxType, amt} = args;
+  console.log('Player', player.info.name, 'paid', taxType, 'Tax amounting to $', amt);
 });
 
 game.setupGame();
@@ -74,8 +84,9 @@ game.startGame();
 
 var phaseOutput;
 
-phaseOutput = game.run();
-//console.log(phaseOutput); //player2, pre-roll
-
-phaseOutput = game.run();
-console.log(phaseOutput);
+[...Array(22).keys()].forEach(x => {
+  console.log(x);
+  phaseOutput = game.run();
+})
+//console.log(game.getPlayerById('1'));
+//console.log(phaseOutput);

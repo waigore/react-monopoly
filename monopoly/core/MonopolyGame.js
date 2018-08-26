@@ -29,6 +29,13 @@ class InvalidMoveError extends Error {
   }
 }
 
+class InvalidOperationError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = 'InvalidOperationError';
+  }
+}
+
 class GameMessageType extends Enum {}
 GameMessageType.initEnum([
   'PHASE_DONE',
@@ -49,7 +56,8 @@ GameEventType.initEnum([
   'PLAYER_ADVANCE',
   'PLAYER_IN_JAIL',
   'PLAYER_OUT_OF_JAIL',
-  'PLAYER_PAID_RENT'
+  'PLAYER_PAID_RENT',
+  'PLAYER_PAID_TAX'
 ]);
 
 class GameState extends Enum {}
@@ -63,6 +71,8 @@ GameState.initEnum([
 const MAX_DOUBLE_ROLLS = 3;
 const MAX_JAIL_TURNS = 3;
 const JAIL_FINE = 50;
+const INCOME_TAX_AMT = 200;
+const SUPER_TAX_PCT = 10;
 
 class MonopolyGame {
   constructor({players}) {
@@ -80,6 +90,7 @@ class MonopolyGame {
           info: tile,
           mortgaged: false,
           houses: 0,
+          hotels: 0,
           ownedPlayerId: null
         });
       });
@@ -170,10 +181,15 @@ class MonopolyGame {
     this.emitEvent(GameEventType.PLAYER_OUT_OF_JAIL, [{player, method}]);
   }
 
-  emitPlayerPaidRent(playerId, tileId) {
+  emitPlayerPaidRent(playerId, tileId, rent) {
     let player = this.getPlayerById(playerId);
-    let tile = this.getTilebyId(tileId);
-    this.emitEvent(GameEventType.PLAYER_PAID_RENT, [{player, tile}]);
+    let tile = this.getTileById(tileId);
+    this.emitEvent(GameEventType.PLAYER_PAID_RENT, [{player, tile, rent}]);
+  }
+
+  emitPlayerPaidTax(playerId, taxType, amt) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PLAYER_PAID_TAX, [{player, taxType, amt}]);
   }
 
   rollDice() {
@@ -186,6 +202,9 @@ class MonopolyGame {
   roll(playerId) {
     let player = this.getPlayerById(playerId);
     let {die1, die2} = this.rollDice();
+    if (die1 == die2) {
+      this.turnPlayerData.doubleRolls++;
+    }
     if (player.inJail)
     {
       if (player.inJailTurns < MAX_JAIL_TURNS)
@@ -195,6 +214,7 @@ class MonopolyGame {
           //player is out of jail! yay!
           player.inJail = false;
           player.inJailTurns = 0;
+          this.turnPlayerData.releasedFromJail = true;
           this.emitPlayerOutOfJail(player.id, 'double roll');
         }
         else
@@ -221,46 +241,40 @@ class MonopolyGame {
       this.advancePlayer(player.id, die1+die2);
 
       let newTile = this.getTileById(player.onTileId);
-      if (newTile.ownedPlayerId == null && newTile.info.isBuyable())
-      {
-        return {
-          tileId: newTile.id,
-          possibleActions: [PlayerAction.BUY, PlayerAction.AUCTION]
-        };
-      }
-      else if (newTile.ownedPlayerId != null && newTile.ownedPlayerId != player.id)
-      {
-        //player owes rent
-        let rent = newTile.info.calculateRent(newTile.houses);
-        let ownedPlayer = this.getPlayerById(newTile.ownedPlayerId);
-        if (player.money >= rent)
-        {
-          player.money -= rent;
-          ownedPlayer.money += rent;
 
-          return {
-            tileId: newTile.id,
-            possibleActions: [PlayerAction.NEXT_PHASE]
-          }
-        }
-        else
+      if (newTile.info.type == BoardTileType.GO_TO_JAIL) {
+        this.gotoJail(playerId);
+      }
+      else if (newTile.info.type == BoardTileType.INCOME_TAX) {
+        this.deductIncomeTax(playerId);
+      }
+      else if (newTile.info.isBuyable()) {
+        if (newTile.ownedPlayerId != null && newTile.ownedPlayerId != player.id)
         {
-          //NOTE: the player should be allowed to trade away their properties
-          //to pay rent, but this is a little too complex to take on now...
-          return {
-            tileId: newTile.id,
-            possibleActions: [PlayerAction.FORFEIT]
+          //player owes rent
+          let rent = this.calculateRent(newTile.id);
+          let ownedPlayer = this.getPlayerById(newTile.ownedPlayerId);
+          if (player.money >= rent)
+          {
+            player.money -= rent;
+            ownedPlayer.money += rent;
+            this.emitPlayerPaidRent(player.id, newTile.id, rent);
+          }
+          else
+          {
+            this.turnPlayerData.outstandingRent = rent;
           }
         }
       }
     }
-    else
-    {
-      return {
-        tileId: newTile.id,
-        possibleActions: [PlayerAction.NEXT_PHASE]
-      }
-    }
+
+    this.turnPlayerData.hasRolled = true;
+  }
+
+  deductIncomeTax(playerId) {
+    let player = this.getPlayerById(playerId);
+    player.money -= INCOME_TAX_AMT;
+    this.emitPlayerPaidTax(player.id, 'Income', INCOME_TAX_AMT);
   }
 
   mortgage(playerId, tileId) {
@@ -339,6 +353,9 @@ class MonopolyGame {
     tile.houses = 0;
     tile.hotels = 0;
     tile.ownedPlayerId = playerId;
+
+    this.emitPlayerAction(player.id, PlayerAction.BUY, {tile, price});
+
   }
 
   advancePlayer(playerId, pos) {
@@ -346,21 +363,17 @@ class MonopolyGame {
     let tile = this.getTileById(player.onTileId);
     let tileIndex = this.getTileIndex(player.onTileId);
 
-    if (tileIndex < this.board.length - 1) {
-      tileIndex = tileIndex + pos;
-    }
-    else {
-      tileIndex = tileIndex + pos - this.board.length;
+    tileIndex = tileIndex + pos;
+
+    if (tileIndex >= this.board.length) {
+      tileIndex = tileIndex - this.board.length;
     }
     player.onTileId = this.board[tileIndex].id;
-    //console.log('new tile id for player:', player.info.name, ' ', player.onTileId);
+    //console.log('new tile id for player:', player.info.name, ' ', player.onTileId, ' tileIndex:', this.board[tileIndex]);
 
     this.emitPlayerAdvance(player.id, player.onTileId);
 
     let newTile = this.getTileById(player.onTileId);
-    if (newTile.info.type == BoardTileType.GO_TO_JAIL) {
-      this.gotoJail(playerId);
-    }
   }
 
   advancePlayerToTile(playerId, tileId) {
@@ -407,53 +420,55 @@ class MonopolyGame {
     }
   }
 
-  /*
-  * trade(p1Id, p2Id, p1Offer, p2Offer) {
-    let player1 = getPlayerById(p1Id);
-    let player2 = getPlayerById(p2Id);
+  calculateRent(tileId, diceRoll) {
+    let tile = this.getTileById(tileId);
+    if (tile.ownedPlayerId == null) {
+      throw new InvalidOperationError("Tile " + tile.info.name + " is not owned by anyone!");
+    }
 
-    let tradeFinished = false;
-    let currentParty = player1, counterParty = player2;
-    let currentPartyOffer, counterPartyOffer;
+    let ownedPlayer = this.getPlayerById(tile.ownedPlayerId);
+    let ownedPlayerAssets = this.getPlayerAssets(ownedPlayer.id);
 
-    while (!tradeFinished) {
-      if (currentParty.id == player1.id) {
-        currentParty = player2;
-        counterParty = player1;
+    if (tile.info.type == BoardTileType.PROPERTY) {
+      let sameColorTiles = this.board.filter(t => t.info.color == tile.info.color);
+      let ownedSameColorCount = ownedPlayerAssets.properties
+            .filter(t => t.info.type == BoardTileType.PROPERTY
+                        && t.info.color == tile.info.color).length;
+      if (tile.hotels > 0) {
+        return tile.info.rent['h'];
+      }
+      else if (tile.houses == 0 && sameColorTiles.length == ownedSameColorCount) {
+        return tile.info.rent['0']*2;
       }
       else {
-        currentParty = player1;
-        counterParty = player2;
-      }
-
-      if (currentParty.type == PlayerType.AI) {
-        let {action, newP1Offer, newP2Offer} =
-          currentParty.ai.considerOffer(this, currentParty, counterParty, p1Offer, p2Offer);
-
-        yield {action, p1Offer: newP1Offer, p2Offer: newP2Offer};
-      } else {
-        yield {
-          humanPlayerInput: 'TRADE_OFFER',
-          currentParty,
-
-        };
+        return tile.info.rent[tile.houses+''];
       }
     }
-  }
-  */
-
-  checkGetOutOfJailNeeded(playerId) {
-    let player = this.getPlayerById(playerId);
-
-    if (!player.inJail || player.inJailTurns < MAX_JAIL_TURNS) {
-      return;
+    else if (tile.info.type == BoardTileType.RAILROAD) {
+      let ownedRailroadCount = ownedPlayerAssets.properties
+                .filter(t => t.info.type == BoardTileType.RAILROAD)
+                .length;
+      if (ownedRailroadCount <= 0 || ownedRailroadCount > 4) {
+        throw new InvalidBoardConfigError("Player has an invalid number of owned railroads! =" + ownedRailroadCount);
+      }
+      return tile.info.rent[ownedRailroadCount+'r'];
+    }
+    else if (tile.info.type == BoardTileType.UTILITY) {
+      let ownedUtilityCount = ownedPlayerAssets.properties
+                .filter(t => t.info.type == BoardTileType.UTILITY)
+                .length;
+      let {die1, die2} = diceRoll;
+      if (ownedUtilityCount <= 0 || ownedUtilityCount > 2) {
+        throw new InvalidBoardConfigError("Player has an invalid number of owned utilities! =" + ownedUtilityCount);
+      }
+      return ownedUtilityCount == 1 ? (die1 + die2) * 4 : (die1 + die2) * 10;
+    }
+    else {
+      throw new InvalidOperationError("Cannot obtain rent on non-buyable tile!" + tile.info.name);
     }
 
-    //player has been in jail for at least 3 turns. Make them pay a fine
-    //and force them out
-    player.money -= JAIL_FINE;
-    player.inJail = false;
-    player.inJailTurns = 0;
+
+    return 10;
   }
 
   setupGame() {
@@ -475,6 +490,15 @@ class MonopolyGame {
     this.ingamePlayers.sort((p1, p2) => -(p1.rollSequence-p2.rollSequence));
   }
 
+  initTurnData() {
+    this.turnPlayerData = {
+      releasedFromJail: false,
+      hasRolled: false,
+      doubleRolls: 0,
+      outstandingRent: 0
+    };
+  }
+
   startGame() {
     if (this.gameState != GameState.READY) {
       throw new InvalidGameStateError('Game is not ready to be started yet!');
@@ -482,10 +506,7 @@ class MonopolyGame {
 
     this.gameState = GameState.RUNNING;
     this.currentPhase = TurnPhase.PRE_ROLL;
-    this.playerTurnData = {
-      hasRolled: false,
-      doubleRolls: 0
-    };
+    this.initTurnData();
     this.emitGameStarted();
 
     let currentPlayerId = this.ingamePlayers[this.currentPlayerIndex].id;
@@ -494,14 +515,23 @@ class MonopolyGame {
   }
 
   possibleActionsForPhase(phase) {
+    let possibleActions;
     switch (phase) {
       case TurnPhase.PRE_ROLL:
-        return this.preRollPossibleActions();
+        possibleActions = this.preRollPossibleActions();
         break;
       case TurnPhase.ROLL:
-        return this.rollPossibleActions();
+        possibleActions = this.rollPossibleActions();
+        break;
+      case TurnPhase.BUY:
+        possibleActions = this.buyPossibleActions();
+        break;
+      case TurnPhase.POST_ROLL:
+        possibleActions = this.postRollPossibleActions();
         break;
     }
+
+    return possibleActions;
   }
 
   preRollPossibleActions() {
@@ -524,8 +554,49 @@ class MonopolyGame {
   }
 
   rollPossibleActions() {
+    let player = this.ingamePlayers[this.currentPlayerIndex];
+    let possibleActions = [];
+    if (
+        !this.turnPlayerData.hasRolled
+        || (this.turnPlayerData.doubleRolls > 0
+            && this.turnPlayerData.doubleRolls < MAX_DOUBLE_ROLLS
+            && !this.turnPlayerData.releasedFromJail)
+      )
+    {
+      possibleActions.push(PlayerAction.ROLL);
+    }
+    else {
+      possibleActions.push(PlayerAction.NEXT_PHASE);
+    }
+
+    return possibleActions;
+  }
+
+  buyPossibleActions() {
+    let player = this.ingamePlayers[this.currentPlayerIndex];
+    let tile = this.getTileById(player.onTileId);
+    let possibleActions = [];
+
+    if (!player.inJail && tile.info.isBuyable() && tile.ownedPlayerId == null) {
+      if (player.money > tile.info.price) {
+        possibleActions.push(PlayerAction.BUY);
+      }
+      possibleActions.push(PlayerAction.AUCTION);
+    }
+    else {
+      possibleActions.push(PlayerAction.NEXT_PHASE);
+    }
+
+    return possibleActions;
+  }
+
+  postRollPossibleActions() {
+    let player = this.ingamePlayers[this.currentPlayerIndex];
     let possibleActions = [
-      PlayerAction.ROLL
+      PlayerAction.NEXT_PHASE,
+      PlayerAction.MORTGAGE,
+      PlayerAction.UNMORTGAGE,
+      PlayerAction.DEVELOP
     ];
 
     return possibleActions;
@@ -533,15 +604,15 @@ class MonopolyGame {
 
   processPhase() {
     let player = this.ingamePlayers[this.currentPlayerIndex];
-
-    /*
-    switch (this.currentPhase) {
-      case TurnPhase.PRE_ROLL:
-        this.checkGetOutOfJailNeeded(player.id);
-        break;
-    }*/
-
     let possibleActions = this.possibleActionsForPhase(this.currentPhase);
+    //console.log('process phase', possibleActions);
+    if (possibleActions.every((a) => a == TurnPhase.NEXT_PHASE)) {
+      return {
+        phase: this.currentPhase,
+        message: GameMessageType.PHASE_DONE,
+        player
+      }
+    }
 
     if (player.info.type == PlayerType.HUMAN) {
       return {
@@ -553,6 +624,12 @@ class MonopolyGame {
     }
     else {
       let aiActions = player.ai.considerAction(this, player, this.currentPhase, possibleActions);
+      if (aiActions.length == 0) {
+        throw new InvalidMoveError('AI must make a move!');
+      }
+      if (aiActions.map(a => a.action).some(act => !possibleActions.includes(act))) {
+        throw new InvalidMoveError('AI made an illegal move!');
+      }
       aiActions.forEach(action => this.handleAIAction(player.id, action));
       return {
         phase: this.currentPhase,
@@ -573,15 +650,15 @@ class MonopolyGame {
 
     switch (playerAction) {
       case PlayerAction.MORTGAGE:
-        tileId = input.tileId;
+        tileId = action.tileId;
         this.mortgage(player.id, tileId);
         break;
       case PlayerAction.UNMORTGAGE:
-        tileId = input.tileId;
+        tileId = action.tileId;
         this.unmortgage(player.id, tileId);
         break;
       case PlayerAction.BUY:
-        tileId = input.tileId;
+        tileId = action.tileId;
         this.buy(player.id, tileId);
         break;
       case PlayerAction.ROLL:
@@ -659,13 +736,16 @@ class MonopolyGame {
       switch (this.currentPhase) {
         case TurnPhase.PRE_ROLL:
           nextPhase = TurnPhase.ROLL;
-        break;
+          break;
         case TurnPhase.ROLL:
+          nextPhase = TurnPhase.BUY;
+          break;
+        case TurnPhase.BUY:
           nextPhase = TurnPhase.POST_ROLL;
-        break;
+          break;
         case TurnPhase.POST_ROLL:
           nextPhase = null;
-        break;
+          break;
       }
 
       let oldPhase = this.currentPhase;
@@ -681,6 +761,7 @@ class MonopolyGame {
         this.currentPhase = TurnPhase.PRE_ROLL;
         phaseOutput.nextPhase = TurnPhase.PRE_ROLL;
         let newPlayer = this.ingamePlayers[this.currentPlayerIndex];
+        this.initTurnData();
         this.emitTurnStarted(newPlayer.id);
       }
       else {
