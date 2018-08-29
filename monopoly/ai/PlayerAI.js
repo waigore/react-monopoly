@@ -11,6 +11,13 @@ class UnsupportedAIError extends Error {
   }
 }
 
+class AINoActionAvailableError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = 'AINoActionAvailableError';
+  }
+}
+
 class AILevel extends Enum {}
 AILevel.initEnum([
   'NONSENSICAL',
@@ -32,9 +39,22 @@ class PlayerAI {
 
   considerAction(game, player, currentPhase, possibleActions) {
     if (currentPhase == TurnPhase.ROLL) {
-      return [{
-        action: PlayerAction.ROLL
-      }]
+      let rollActionFound = possibleActions.some(a => a == PlayerAction.ROLL);
+      let nextPhaseActionFound = possibleActions.some(a => a == PlayerAction.NEXT_PHASE);
+
+      if (rollActionFound) {
+        return [{
+          action: PlayerAction.ROLL
+        }]
+      }
+      else if (nextPhaseActionFound) {
+        return [{
+          action: PlayerAction.NEXT_PHASE
+        }]
+      }
+      else {
+        throw new AINoActionAvailableError("");
+      }
     }
 
     return this.aiModule.considerAction(game, player, currentPhase, possibleActions);

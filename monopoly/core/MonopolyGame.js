@@ -57,7 +57,8 @@ GameEventType.initEnum([
   'PLAYER_IN_JAIL',
   'PLAYER_OUT_OF_JAIL',
   'PLAYER_PAID_RENT',
-  'PLAYER_PAID_TAX'
+  'PLAYER_PAID_TAX',
+  'PLAYER_PASSED_GO'
 ]);
 
 class GameState extends Enum {}
@@ -190,6 +191,11 @@ class MonopolyGame {
   emitPlayerPaidTax(playerId, taxType, amt) {
     let player = this.getPlayerById(playerId);
     this.emitEvent(GameEventType.PLAYER_PAID_TAX, [{player, taxType, amt}]);
+  }
+
+  emitPlayerPassedGo(playerId) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PLAYER_PASSED_GO, [{player}]);
   }
 
   rollDice() {
@@ -367,6 +373,7 @@ class MonopolyGame {
 
     if (newTileIndex >= this.board.length) {
       newTileIndex = newTileIndex - this.board.length;
+      this.passGo(playerId);
     }
     player.onTileId = this.board[newTileIndex].id;
     /*console.log('new tile id for player:', player.info.name, ' ', player.onTileId,
@@ -381,6 +388,13 @@ class MonopolyGame {
     let tile = this.getTileById(tileId);
 
     player.onTileId = this.getTileById(tile.id).id;
+  }
+
+  passGo(playerId) {
+    let player = this.getPlayerById(playerId);
+    player.money += 200;
+
+    this.emitPlayerPassedGo(player.id);
   }
 
   goToJail(playerId) {
