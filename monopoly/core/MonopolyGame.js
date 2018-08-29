@@ -160,10 +160,10 @@ class MonopolyGame {
     this.emitEvent(GameEventType.PLAYER_ACTION, [{player, action, ...args}]);
   }
 
-  emitPlayerAdvance(playerId, tileId) {
+  emitPlayerAdvance(playerId, pos, tileId) {
     let player = this.getPlayerById(playerId);
     let tile = this.getTileById(tileId);
-    this.emitEvent(GameEventType.PLAYER_ADVANCE, [{player, tile}]);
+    this.emitEvent(GameEventType.PLAYER_ADVANCE, [{player, pos, tile}]);
   }
 
   /*
@@ -243,7 +243,7 @@ class MonopolyGame {
       let newTile = this.getTileById(player.onTileId);
 
       if (newTile.info.type == BoardTileType.GO_TO_JAIL) {
-        this.gotoJail(playerId);
+        this.goToJail(playerId);
       }
       else if (newTile.info.type == BoardTileType.INCOME_TAX) {
         this.deductIncomeTax(playerId);
@@ -363,24 +363,24 @@ class MonopolyGame {
     let tile = this.getTileById(player.onTileId);
     let tileIndex = this.getTileIndex(player.onTileId);
 
-    tileIndex = tileIndex + pos;
+    let newTileIndex = tileIndex + pos;
 
-    if (tileIndex >= this.board.length) {
-      tileIndex = tileIndex - this.board.length;
+    if (newTileIndex >= this.board.length) {
+      newTileIndex = newTileIndex - this.board.length;
     }
-    player.onTileId = this.board[tileIndex].id;
-    //console.log('new tile id for player:', player.info.name, ' ', player.onTileId, ' tileIndex:', this.board[tileIndex]);
+    player.onTileId = this.board[newTileIndex].id;
+    /*console.log('new tile id for player:', player.info.name, ' ', player.onTileId,
+        ' tileIndex:', this.board[tileIndex],
+        ' newTileIndex:', this.board[newTileIndex]);*/
 
-    this.emitPlayerAdvance(player.id, player.onTileId);
-
-    let newTile = this.getTileById(player.onTileId);
+    this.emitPlayerAdvance(player.id, pos, player.onTileId);
   }
 
   advancePlayerToTile(playerId, tileId) {
     let player = this.getPlayerById(playerId);
     let tile = this.getTileById(tileId);
 
-    player.onTileId = this.getTileIndex(tile.id);
+    player.onTileId = this.getTileById(tile.id).id;
   }
 
   goToJail(playerId) {
@@ -403,6 +403,19 @@ class MonopolyGame {
 
   getTileById(tileId) {
     return this.board.filter(t => t.id == tileId)[0];
+  }
+
+  getTileIndex(tileId) {
+    let tileIndex = null;
+    this.board.forEach((t, index) => {
+      if (t.id == tileId) {
+        tileIndex = index;
+      }
+    });
+    if (tileIndex == null) {
+      throw new InvalidOperationError("No such tile id:" + tileId);
+    }
+    return tileIndex;
   }
 
   findTileByType(tileType) {
