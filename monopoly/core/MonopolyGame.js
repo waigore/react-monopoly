@@ -2,6 +2,7 @@ import { Enum } from 'enumify';
 import EventEmitter from 'wolfy87-eventemitter';
 
 import tileData from './BoardData';
+import { ukChanceCardData, ukCommChestCardData } from './CardData';
 import { BoardTileType } from './BoardTile';
 import { PlayerType, Player } from './Player';
 import PlayerAction from './PlayerAction';
@@ -58,7 +59,8 @@ GameEventType.initEnum([
   'PLAYER_OUT_OF_JAIL',
   'PLAYER_PAID_RENT',
   'PLAYER_PAID_TAX',
-  'PLAYER_PASSED_GO'
+  'PLAYER_PASSED_GO',
+  'PLAYER_DREW_CARD'
 ]);
 
 class GameState extends Enum {}
@@ -75,10 +77,23 @@ const JAIL_FINE = 50;
 const INCOME_TAX_AMT = 200;
 const SUPER_TAX_PCT = 10;
 
+function shuffle(a) {
+    var j, x, i;
+    for (i = a.length - 1; i > 0; i--) {
+        j = Math.floor(Math.random() * (i + 1));
+        x = a[i];
+        a[i] = a[j];
+        a[j] = x;
+    }
+    return a;
+}
+
 class MonopolyGame {
   constructor({players}) {
     this.board = [];
     this.ingamePlayers = [];
+    this.chanceCardDeck = [];
+    this.commChestCardDeck = [];
     this.currentPlayerIndex = -1;
     this.gameState = GameState.INIT;
     this.ee = new EventEmitter();
@@ -97,6 +112,10 @@ class MonopolyGame {
       });
     });
 
+    if (this.board[0].info.type != BoardTileType.GO) {
+      throw new InvalidBoardConfigError('The first tile is not GO!');
+    }
+
     players.forEach((player, playerIndex) => {
       this.ingamePlayers.push({
         id: playerIndex,
@@ -108,12 +127,24 @@ class MonopolyGame {
         inJailTurns: 0,
         getOutOfJailCard: false,
         money: 1500
-      })
+      });
     });
 
-    if (this.board[0].info.type != BoardTileType.GO) {
-      throw new InvalidBoardConfigError('The first tile is not GO!');
-    }
+    ukChanceCardData.forEach((card, cardIndex) => {
+      this.chanceCardDeck.push({
+        info: card,
+        deckName: 'CHANCE'
+      });
+    });
+    shuffle(this.chanceCardDeck);
+
+    ukCommChestCardData.forEach((card, cardIndex) => {
+      this.commChestCardDeck.push({
+        info: card,
+        deckName: 'COMM_CHEST'
+      });
+    });
+    shuffle(this.commChestCardDeck);
   }
 
   addEventListener(eventName, callback) {
@@ -198,19 +229,55 @@ class MonopolyGame {
     this.emitEvent(GameEventType.PLAYER_PASSED_GO, [{player}]);
   }
 
-  rollDice() {
-    let die1 = Math.floor(Math.random()*6)+1;
-    let die2 = Math.floor(Math.random()*6)+1;
+  emitPlayerDrewCard(playerId, card) {
+    let player = this.getPlayerById(playerId);
+    this.emitEvent(GameEventType.PLAYER_DREW_CARD, [{player, card}]);
+  }
+
+  drawCardFromDeck(playerId, deck) {
+    let card = deck.shift();
+    this.turnPlayerData.drawnCard = card;
+    deck.push(card);
+    this.emitPlayerDrewCard(playerId, card);
+    return card;
+  }
+
+  drawChanceCard(playerId) {
+    return this.drawCardFromDeck(playerId, this.chanceCardDeck);
+  }
+
+  drawCommChestCard(playerId) {
+    return this.drawCardFromDeck(playerId, this.commChestCardDeck);
+  }
+
+  rollDice(die1=null, die2=null) {
+    if (die1 == null) {
+      die1 = Math.floor(Math.random()*6)+1;
+    }
+    if (die2 == null) {
+      die2 = Math.floor(Math.random()*6)+1;
+    }
 
     return {die1, die2};
   }
 
   roll(playerId) {
     let player = this.getPlayerById(playerId);
+    this.turnPlayerData.hasRolled = true;
+
     let {die1, die2} = this.rollDice();
     if (die1 == die2) {
       this.turnPlayerData.doubleRolls++;
+      if (this.turnPlayerData.doubleRolls >= MAX_DOUBLE_ROLLS)
+      {
+        this.goToJail(playerId);
+        return;
+      }
     }
+    else {
+      this.turnPlayerData.doubleRolls = 0;
+    }
+
     if (player.inJail)
     {
       if (player.inJailTurns < MAX_JAIL_TURNS)
@@ -254,27 +321,47 @@ class MonopolyGame {
       else if (newTile.info.type == BoardTileType.INCOME_TAX) {
         this.deductIncomeTax(playerId);
       }
-      else if (newTile.info.isBuyable()) {
-        if (newTile.ownedPlayerId != null && newTile.ownedPlayerId != player.id)
-        {
-          //player owes rent
-          let rent = this.calculateRent(newTile.id);
-          let ownedPlayer = this.getPlayerById(newTile.ownedPlayerId);
-          if (player.money >= rent)
-          {
-            player.money -= rent;
-            ownedPlayer.money += rent;
-            this.emitPlayerPaidRent(player.id, newTile.id, rent);
-          }
-          else
-          {
-            this.turnPlayerData.outstandingRent = rent;
-          }
-        }
+      else if (newTile.info.type == BoardTileType.CHANCE) {
+        let card = this.drawChanceCard(playerId);
+        card.info.effect(this, this.getPlayerById(playerId));
+      }
+      else if (newTile.info.type == BoardTileType.COMM_CHEST) {
+        let card = this.drawCommChestCard(playerId);
+        card.info.effect(this, this.getPlayerById(playerId));
+      }
+      else if (this.isRentDue(playerId, newTile.id)) {
+        //player owes rent
+        this.payRent(playerId, newTile.id);
       }
     }
+  }
 
-    this.turnPlayerData.hasRolled = true;
+  isRentDue(playerId, tileId) {
+    let player = this.getPlayerById(playerId);
+    let tile = this.getTileById(tileId);
+
+    return tile.info.isBuyable() &&
+          tile.ownedPlayerId != null &&
+          tile.ownedPlayerId != playerId &&
+          !tile.mortgaged;
+  }
+
+  payRent(playerId, tileId, multiplier=1) {
+    let player = this.getPlayerById(playerId);
+    let tile = this.getTileById(tileId);
+
+    let rent = this.calculateRent(tile.id, multiplier);
+    let ownedPlayer = this.getPlayerById(tile.ownedPlayerId);
+    if (player.money >= rent)
+    {
+      player.money -= rent;
+      ownedPlayer.money += rent;
+      this.emitPlayerPaidRent(player.id, tile.id, rent);
+    }
+    else
+    {
+      this.turnPlayerData.outstandingRent = rent;
+    }
   }
 
   deductIncomeTax(playerId) {
@@ -364,6 +451,7 @@ class MonopolyGame {
 
   }
 
+  /* Allows the player to go back and forth on the board by {pos} spaces */
   advancePlayer(playerId, pos) {
     let player = this.getPlayerById(playerId);
     let tile = this.getTileById(player.onTileId);
@@ -374,6 +462,9 @@ class MonopolyGame {
     if (newTileIndex >= this.board.length) {
       newTileIndex = newTileIndex - this.board.length;
       this.passGo(playerId);
+    }
+    else if (newTileIndex < 0) {
+      newTileIndex = newTileIndex + this.board.length;
     }
     player.onTileId = this.board[newTileIndex].id;
     /*console.log('new tile id for player:', player.info.name, ' ', player.onTileId,
@@ -406,6 +497,18 @@ class MonopolyGame {
     this.emitPlayerInJail(player.id, player.inJailTurns);
   }
 
+  /* Clockwise distance i.e. the distance players travel if they
+  go the usual way on the board */
+  calcTileDistance(tile1Id, tile2Id) {
+    let index1 = this.getTileIndex(tile1Id);
+    let index2 = this.getTileIndex(tile2Id);
+
+    if (index2 < index1) {
+      index2 += this.board.length;
+    }
+    return index2 - index1;
+  }
+
   getTileIndex(tileId) {
     this.board.forEach((tile, tileIndex) => {
       if (tile.id == tileId) {
@@ -417,6 +520,10 @@ class MonopolyGame {
 
   getTileById(tileId) {
     return this.board.filter(t => t.id == tileId)[0];
+  }
+
+  getTileByCode(code) {
+    return this.board.filter(t => t.info.code == code)[0];
   }
 
   getTileIndex(tileId) {
@@ -447,7 +554,7 @@ class MonopolyGame {
     }
   }
 
-  calculateRent(tileId, diceRoll) {
+  calculateRent(tileId, diceRoll, multiplier=1) {
     let tile = this.getTileById(tileId);
     if (tile.ownedPlayerId == null) {
       throw new InvalidOperationError("Tile " + tile.info.name + " is not owned by anyone!");
@@ -462,13 +569,13 @@ class MonopolyGame {
             .filter(t => t.info.type == BoardTileType.PROPERTY
                         && t.info.color == tile.info.color).length;
       if (tile.hotels > 0) {
-        return tile.info.rent['h'];
+        return tile.info.rent['h']*multiplier;
       }
       else if (tile.houses == 0 && sameColorTiles.length == ownedSameColorCount) {
-        return tile.info.rent['0']*2;
+        return tile.info.rent['0']*2*multiplier;
       }
       else {
-        return tile.info.rent[tile.houses+''];
+        return tile.info.rent[tile.houses+'']*multiplier;
       }
     }
     else if (tile.info.type == BoardTileType.RAILROAD) {
@@ -478,7 +585,7 @@ class MonopolyGame {
       if (ownedRailroadCount <= 0 || ownedRailroadCount > 4) {
         throw new InvalidBoardConfigError("Player has an invalid number of owned railroads! =" + ownedRailroadCount);
       }
-      return tile.info.rent[ownedRailroadCount+'r'];
+      return tile.info.rent[ownedRailroadCount+'r']*multiplier;
     }
     else if (tile.info.type == BoardTileType.UTILITY) {
       let ownedUtilityCount = ownedPlayerAssets.properties
@@ -488,7 +595,7 @@ class MonopolyGame {
       if (ownedUtilityCount <= 0 || ownedUtilityCount > 2) {
         throw new InvalidBoardConfigError("Player has an invalid number of owned utilities! =" + ownedUtilityCount);
       }
-      return ownedUtilityCount == 1 ? (die1 + die2) * 4 : (die1 + die2) * 10;
+      return ownedUtilityCount == 1 || multiplier > 1 ? (die1 + die2) * 4 : (die1 + die2) * 10;
     }
     else {
       throw new InvalidOperationError("Cannot obtain rent on non-buyable tile!" + tile.info.name);
@@ -522,7 +629,8 @@ class MonopolyGame {
       releasedFromJail: false,
       hasRolled: false,
       doubleRolls: 0,
-      outstandingRent: 0
+      outstandingRent: 0,
+      drawnCard: null
     };
   }
 
@@ -768,7 +876,15 @@ class MonopolyGame {
           nextPhase = TurnPhase.BUY;
           break;
         case TurnPhase.BUY:
-          nextPhase = TurnPhase.POST_ROLL;
+          if (this.turnPlayerData.hasRolled
+            && this.turnPlayerData.doubleRolls > 0
+            && this.turnPlayerData.doubleRolls < MAX_DOUBLE_ROLLS
+            ) {
+            nextPhase = TurnPhase.ROLL;
+          }
+          else {
+            nextPhase = TurnPhase.POST_ROLL;
+          }
           break;
         case TurnPhase.POST_ROLL:
           nextPhase = null;

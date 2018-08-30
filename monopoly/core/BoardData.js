@@ -17,9 +17,12 @@ import {
 
 const ukTileData = [
   [
-    GoTile({}),
+    GoTile({
+      code: 'go'
+    }),
     PropertyTile({
       name: 'Old Kent Road',
+      code: 'brown_01',
       color: PropertyColor.BROWN,
       price: 60,
       houseCost: 30,
@@ -33,10 +36,13 @@ const ukTileData = [
         'h': 250
       }
     }),
-    CommChestTile({}),
+    CommChestTile({
+      code: 'commchest_01'
+    }),
     PropertyTile({
       name: 'Whitechapel Road',
       color: PropertyColor.BROWN,
+      code: 'brown_02',
       price: 60,
       houseCost: 30,
       mortgageValue: 50,
@@ -49,9 +55,12 @@ const ukTileData = [
         'h': 450
       }
     }),
-    IncomeTaxTile({}),
+    IncomeTaxTile({
+      code: 'incometax_01'
+    }),
     RailroadTile({
       name: 'Kings Cross Station',
+      code: 'rr_01',
       price: 200,
       mortgageValue: 100,
       rent: {
@@ -63,6 +72,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'The Angel Islington',
+      code: 'lightblue_01',
       color: PropertyColor.LIGHT_BLUE,
       price: 100,
       houseCost: 50,
@@ -76,9 +86,12 @@ const ukTileData = [
         'h': 550
       }
     }),
-    ChanceTile({}),
+    ChanceTile({
+      code: 'chance_01'
+    }),
     PropertyTile({
       name: 'Euston Road',
+      code: 'lightblue_02',
       color: PropertyColor.LIGHT_BLUE,
       price: 100,
       houseCost: 50,
@@ -94,6 +107,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Pentonville Road',
+      code: 'lightblue_03',
       color: PropertyColor.LIGHT_BLUE,
       price: 120,
       houseCost: 60,
@@ -109,9 +123,12 @@ const ukTileData = [
     }),
   ],
   [
-    JailTile({}),
+    JailTile({
+      code: 'jail'
+    }),
     PropertyTile({
       name: 'Pall Mall',
+      code: 'purple_01',
       color: PropertyColor.PURPLE,
       price: 140,
       houseCost: 100,
@@ -127,11 +144,13 @@ const ukTileData = [
     }),
     UtilityTile({
       name: 'Electric Company',
+      code: 'util_01',
       price: 150,
       mortgageValue: 75
     }),
     PropertyTile({
       name: 'Whitehall',
+      code: 'purple_02',
       color: PropertyColor.PURPLE,
       price: 140,
       houseCost: 100,
@@ -147,6 +166,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Northumberland Avenue',
+      code: 'purple_03',
       color: PropertyColor.PURPLE,
       price: 160,
       houseCost: 100,
@@ -162,6 +182,7 @@ const ukTileData = [
     }),
     RailroadTile({
       name: 'Marylebone Station',
+      code: 'rr_02',
       price: 200,
       mortgageValue: 100,
       rent: {
@@ -173,6 +194,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Bow Street',
+      code: 'orange_01',
       color: PropertyColor.ORANGE,
       price: 180,
       houseCost: 100,
@@ -186,9 +208,12 @@ const ukTileData = [
         'h': 950
       }
     }),
-    CommChestTile({}),
+    CommChestTile({
+      code: 'commchest_02'
+    }),
     PropertyTile({
       name: 'Marlborough Street',
+      code: 'orange_02',
       color: PropertyColor.ORANGE,
       price: 180,
       houseCost: 100,
@@ -204,6 +229,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Vine Street',
+      code: 'orange_03',
       color: PropertyColor.ORANGE,
       price: 200,
       houseCost: 100,
@@ -219,9 +245,12 @@ const ukTileData = [
     }),
   ],
   [
-    FreeParkingTile({}),
+    FreeParkingTile({
+      code: 'freeparking'
+    }),
     PropertyTile({
       name: 'The Strand',
+      code: 'red_01',
       color: PropertyColor.RED,
       price: 220,
       houseCost: 150,
@@ -235,9 +264,12 @@ const ukTileData = [
         'h': 1050
       }
     }),
-    ChanceTile({}),
+    ChanceTile({
+      code: 'chance_02'
+    }),
     PropertyTile({
       name: 'Fleet Street',
+      code: 'red_02',
       color: PropertyColor.RED,
       price: 220,
       houseCost: 150,
@@ -253,6 +285,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Trafalgar Square',
+      code: 'red_03',
       color: PropertyColor.RED,
       price: 240,
       houseCost: 150,
@@ -268,6 +301,7 @@ const ukTileData = [
     }),
     RailroadTile({
       name: 'Fenchurch St. Station',
+      code: 'rr_03',
       price: 200,
       mortgageValue: 100,
       rent: {
@@ -279,6 +313,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Leicester Square',
+      code: 'yellow_01',
       color: PropertyColor.YELLOW,
       price: 260,
       houseCost: 150,
@@ -294,6 +329,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Coventry Street',
+      code: 'yellow_02',
       color: PropertyColor.YELLOW,
       price: 260,
       houseCost: 150,
@@ -309,11 +345,13 @@ const ukTileData = [
     }),
     UtilityTile({
       name: 'Water Works',
+      code: 'util_02',
       price: 150,
       mortgageValue: 75
     }),
     PropertyTile({
       name: 'Piccadilly',
+      code: 'yellow_03',
       color: PropertyColor.YELLOW,
       price: 280,
       houseCost: 140,
@@ -329,9 +367,12 @@ const ukTileData = [
     }),
   ],
   [
-    GoToJailTile({}),
+    GoToJailTile({
+      code: 'gotojail'
+    }),
     PropertyTile({
       name: 'Regent Street',
+      code: 'green_01',
       color: PropertyColor.GREEN,
       price: 300,
       houseCost: 150,
@@ -347,6 +388,7 @@ const ukTileData = [
     }),
     PropertyTile({
       name: 'Oxford Street',
+      code: 'green_02',
       color: PropertyColor.GREEN,
       price: 300,
       houseCost: 150,
@@ -360,9 +402,12 @@ const ukTileData = [
         'h': 1275
       }
     }),
-    CommChestTile({}),
+    CommChestTile({
+      code: 'commchest_03'
+    }),
     PropertyTile({
       name: 'Bond Street',
+      code: 'green_03',
       color: PropertyColor.GREEN,
       price: 320,
       houseCost: 160,
@@ -378,6 +423,7 @@ const ukTileData = [
     }),
     RailroadTile({
       name: 'Liverpool St. Station',
+      code: 'rr_04',
       price: 200,
       mortgageValue: 100,
       rent: {
@@ -387,9 +433,12 @@ const ukTileData = [
         '4r': 200,
       }
     }),
-    ChanceTile({}),
+    ChanceTile({
+      code: 'chance_03'
+    }),
     PropertyTile({
       name: 'Park Lane',
+      code: 'darkblue_01',
       color: PropertyColor.DARK_BLUE,
       price: 350,
       houseCost: 200,
@@ -403,9 +452,12 @@ const ukTileData = [
         'h': 1500
       }
     }),
-    SuperTaxTile({}),
+    SuperTaxTile({
+      code: 'supertax_01'
+    }),
     PropertyTile({
       name: 'Mayfair',
+      code: 'darkblue_02',
       color: PropertyColor.DARK_BLUE,
       price: 400,
       houseCost: 200,

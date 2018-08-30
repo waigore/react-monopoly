@@ -49,6 +49,15 @@ var game = new MonopolyGame({players});
 game.allPlayerNames = function() {
   return this.ingamePlayers.map(p => p.info.name);
 }
+game.allPlayerStates = function() {
+  return this.ingamePlayers.map(p => {
+    return {
+      name: p.info.name,
+      money: p.money,
+      properties: this.getPlayerAssets(p.id).properties.map(t => t.info.name)
+    }
+  });
+}
 game.addEventListener(GameEventType.GAME_READY, () => {
   console.log('Game ready!');
 });
@@ -63,6 +72,7 @@ game.addEventListener(GameEventType.TURN_STARTED, (args) => {
 game.addEventListener(GameEventType.TURN_ENDED, (args) => {
   let {player} = args;
   console.log('Turn ended for player', player.info.name);
+  console.log('Players:', game.allPlayerStates());
 });
 game.addEventListener(GameEventType.PHASE_STARTED, (args) => {
   let {player, phase} = args;
@@ -91,13 +101,25 @@ game.addEventListener(GameEventType.PLAYER_IN_JAIL, (args) => {
   let {player, turns} = args;
   phaseLog('Player', player.info.name, 'is in jail! This is the', turns, 'turn since they have been there.');
 });
+game.addEventListener(GameEventType.PLAYER_OUT_OF_JAIL, (args) => {
+  let {player, method} = args;
+  phaseLog('Player', player.info.name, 'is out of jail! Yay!');
+});
+game.addEventListener(GameEventType.PLAYER_PASSED_GO, (args) => {
+  let {player} = args;
+  phaseLog('Player', player.info.name, 'passed go!');
+});
+game.addEventListener(GameEventType.PLAYER_DREW_CARD, (args) => {
+  let {player, card} = args;
+  phaseLog('Player', player.info.name, 'drew card:', card.info.description);
+})
 
 game.setupGame();
 game.startGame();
 
 var phaseOutput;
 
-[...Array(75).keys()].forEach(x => {
+[...Array(61).keys()].forEach(x => {
   console.log(x);
   phaseCounter = x;
   phaseOutput = game.run();

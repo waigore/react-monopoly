@@ -37,8 +37,9 @@ Rent should be an object with the following fields:
 - hotel
 */
 class BoardTile {
-  constructor({name, type, color, price, mortgageValue, rent, ownable}) {
+  constructor({name, code, type, color, price, mortgageValue, rent, ownable}) {
     this.name = name;
+    this.code = code;
     this.type = type;
     this.color = color;
     this.price = price;
