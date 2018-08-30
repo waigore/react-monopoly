@@ -13,6 +13,7 @@ PlayerAction.initEnum([
   'MORTGAGE',
   'UNMORTGAGE',
   'DEVELOP',
+  'SELL',
   'BUY',
   'AUCTION',
   'END_TURN',

@@ -88,6 +88,14 @@ game.addEventListener(GameEventType.PLAYER_ACTION, (args) => {
     let {tile, price} = args;
     phaseLog('Player', player.info.name, 'buys', tile.info.name, 'for $', price);
   }
+  else if (action == PlayerAction.DEVELOP) {
+    let {tile} = args;
+    phaseLog('Player', player.info.name, 'develops', tile.info.name, '! Dev is now houses:', tile.houses, 'hotels:', tile.hotels);
+  }
+  else if (action == PlayerAction.SELL) {
+    let {tile} = args;
+    phaseLog('Player', player.info.name, 'sells dev on', tile.info.name, '! Dev is now houses:', tile.houses, 'hotels:', tile.hotels);
+  }
 });
 game.addEventListener(GameEventType.PLAYER_PAID_RENT, (args) => {
   let {player, tile, rent} = args;

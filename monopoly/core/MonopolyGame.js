@@ -73,6 +73,10 @@ GameState.initEnum([
 
 const MAX_DOUBLE_ROLLS = 3;
 const MAX_JAIL_TURNS = 3;
+const MAX_HOUSES = 32;
+const MAX_HOTELS = 12;
+const MAX_HOUSE_DEV = 4;
+const MAX_HOTEL_DEV = 1;
 const JAIL_FINE = 50;
 const INCOME_TAX_AMT = 200;
 const SUPER_TAX_PCT = 10;
@@ -97,6 +101,8 @@ class MonopolyGame {
     this.currentPlayerIndex = -1;
     this.gameState = GameState.INIT;
     this.ee = new EventEmitter();
+    this.housesAvailable = MAX_HOUSES;
+    this.hotelsAvailable = MAX_HOTELS;
 
     tileData.forEach((list, listIndex) => {
       list.forEach((tile, tileIndex) => {
@@ -392,7 +398,7 @@ class MonopolyGame {
       throw new InvalidMoveError(tile.info.name + " cannot mortgage: is developed!");
     }
 
-    let mortgage = tile.info.mortgage;
+    let mortgage = tile.info.mortgageValue;
     player.money += mortgage;
     tile.mortgaged = true;
   }
@@ -415,13 +421,95 @@ class MonopolyGame {
       throw new InvalidMoveError(tile.info.name + " is not mortgaged!")
     }
 
-    let mortgage = tile.info.mortgage;
+    let mortgage = tile.info.mortgageValue;
     if (player.money < mortgage) {
       throw new InvalidMoveError(player.info.name + " does not have enough money to unmortgage tile!");
     }
 
     player.money -= mortgage;
     tile.mortgaged = false;
+  }
+
+  develop(playerId, tileId) {
+    let tile = this.getTileById(tileId);
+    let player = this.getPlayerById(playerId);
+    if (!tile.info.isDevelopable())
+    {
+      throw new InvalidMoveError(tile.info.name + " cannot be developed: is of type " + tile.info.type + "!");
+    }
+
+    if (tile.ownedPlayerId != player.id) {
+      throw new InvalidMoveError(tile.info.name + " is not owned by player " + player.info.name + "!");
+    }
+
+    let playerProperties = this.getPlayerAssets(playerId).properties;
+    let allSameColorTiles = this.board.filter(t => t.info.color == tile.info.color);
+    let ownedSameColorTiles = playerProperties
+          .filter(t => t.info.type == BoardTileType.PROPERTY
+                      && t.info.color == tile.info.color);
+    if (allSameColorTiles.length != ownedSameColorTiles.length) {
+      throw new InvalidMoveError("Player does not own all properties of color " + tile.info.color + "!");
+    }
+
+    if (ownedSameColorTiles.some(t => t.mortaged)) {
+      throw new InvalidMoveError("Cannot develop! At least one property in the set is mortgaged.");
+    }
+
+    if (tile.hotels >= MAX_HOTEL_DEV) {
+      throw new InvalidMoveError("Cannot develop this property! Maximum dev reached.");
+    }
+
+    let tileHouseNums = ownedSameColorTiles.map(t => t.hotels > 0 ? 5 : t.houses);
+    if (tileHouseNums.some(n => (tile.houses+1)-n>1)) {
+      throw new InvalidMoveError("Cannot develop this property! You must develop the others first.");
+    }
+
+    if (tile.houses >= MAX_HOUSE_DEV) {
+      if (this.hotelsAvailable == 0) {
+        throw new InvalidMoveError("No hotels left for development!");
+      }
+      tile.hotels += 1;
+      this.hotelsAvailable -= 1;
+    }
+    else {
+      if (this.housesAvailable == 0) {
+        throw new InvalidMoveError("No houses left for development!");
+      }
+      tile.houses += 1;
+      this.housesAvailable -= 1;
+    }
+    player.money -= tile.info.houseCost;
+
+    this.emitPlayerAction(player.id, PlayerAction.DEVELOP, {tile});
+  }
+
+  sell(playerId, tileId) {
+    let tile = this.getTileById(tileId);
+    let player = this.getPlayerById(playerId);
+
+    if (!tile.info.isDevelopable())
+    {
+      throw new InvalidMoveError(tile.info.name + " cannot be sold: is of type " + tile.info.type + "!");
+    }
+
+    if (tile.ownedPlayerId != player.id) {
+      throw new InvalidMoveError(tile.info.name + " is not owned by player " + player.info.name + "!");
+    }
+
+    if (tile.hotels == 0 && tile.houses == 0) {
+      throw new InvalidMoveError(tile.info.name + " is undeveloped!");
+    }
+
+    if (tile.hotels > 0) {
+      tile.hotels -= 1;
+      tile.houses = MAX_HOUSE_DEV;
+    }
+    else {
+      tile.houses -= 1;
+    }
+    player.money += tile.info.houseCost/2;
+
+    this.emitPlayerAction(player.id, PlayerAction.SELL, {tile});
   }
 
   buy(playerId, tileId) {
