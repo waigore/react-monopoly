@@ -3,7 +3,7 @@ import { Enum } from 'enumify';
 class TurnPhase extends Enum {}
 TurnPhase.initEnum([
   'PRE_ROLL',
-  'Pre_ROLL_TRADE',
+  'TRADE',
   'ROLL',
   'BUY',
   'POST_ROLL',

@@ -77,6 +77,7 @@ const MAX_HOUSES = 32;
 const MAX_HOTELS = 12;
 const MAX_HOUSE_DEV = 4;
 const MAX_HOTEL_DEV = 1;
+const AUCTION_INCREMENT = 10;
 const JAIL_FINE = 50;
 const INCOME_TAX_AMT = 200;
 const SUPER_TAX_PCT = 10;
@@ -597,6 +598,7 @@ class MonopolyGame {
     return index2 - index1;
   }
 
+  /*
   getTileIndex(tileId) {
     this.board.forEach((tile, tileIndex) => {
       if (tile.id == tileId) {
@@ -605,6 +607,7 @@ class MonopolyGame {
     });
     return -1;
   }
+  */
 
   getTileById(tileId) {
     return this.board.filter(t => t.id == tileId)[0];
@@ -629,6 +632,19 @@ class MonopolyGame {
 
   findTileByType(tileType) {
     return this.board.filter(t => t.info.type == tileType)[0];
+  }
+
+  getPlayerIndex(playerId) {
+    let playerIndex = null;
+    this.inGamePlayers.forEach((p, index) => {
+      if (p.id == playerId) {
+        playerIndex = index;
+      }
+    });
+    if (playerIndex == null) {
+      throw new InvalidOperationError("No such player id:" + playerId);
+    }
+    return playerIndex;
   }
 
   getPlayerById(playerId) {
@@ -718,8 +734,57 @@ class MonopolyGame {
       hasRolled: false,
       doubleRolls: 0,
       outstandingRent: 0,
+      auctionRequested: false,
       drawnCard: null
     };
+  }
+
+  initAuction(playerId, tileId) {
+    this.turnPlayerData.auctionRequested = true;
+    this.turnAuctionData = {
+      currentBiddingPlayerIndex: this.getPlayerIndex(playerId),
+      lastBiddingPlayerIndex: null,
+      tileId,
+      currentPrice: 0,
+      abstrainCount: 0,
+      auctionOver: false
+    };
+  }
+
+  auctionBid(playerId, increment) {
+    let auctionData = this.turnAuctionData;
+
+    auctionData.lastBiddingPlayerIndex =
+        auctionData.currentBiddingPlayerIndex;
+    auctionData.currentPrice += increment;
+    auctionData.abstainCount = 0;
+
+    auctionData.currentBiddingPlayerIndex += 1;
+    if (auctionData.currentBiddingPlayerIndex >= this.ingamePlayers.length) {
+      auctionData.currentBiddingPlayerIndex = 0;
+    }
+  }
+
+  auctionAbstain(playerId) {
+    let auctionData = this.turnAuctionData;
+
+    if (auctionData.abstainCount >= this.ingamePlayers.length-1
+        && auctionData.lastBiddingPlayerIndex != null ) {
+      auctionData.auctionOver = true;
+      let successfulPlayer = this.ingamePlayers[auctionData.lastBiddingPlayerIndex];
+      this.buy(successfulPlayer.id, auctionData.tileId);
+      return;
+    }
+    else if (auctionData.abstainCount >= this.ingamePlayers.length-1) {
+      auctionData.auctionOver = true;
+      return;
+    }
+
+    auctionData.abstainCount += 1;
+    this.turnAuctionData.currentBiddingPlayerIndex += 1;
+    if (auctionData.currentBiddingPlayerIndex >= this.ingamePlayers.length) {
+      auctionData.currentBiddingPlayerIndex = 0;
+    }
   }
 
   startGame() {
@@ -738,23 +803,26 @@ class MonopolyGame {
   }
 
   possibleActionsForPhase(phase) {
-    let possibleActions;
+    let possibleActions, player;
     switch (phase) {
       case TurnPhase.PRE_ROLL:
-        possibleActions = this.preRollPossibleActions();
+        ({player, possibleActions} = this.preRollPossibleActions());
         break;
       case TurnPhase.ROLL:
-        possibleActions = this.rollPossibleActions();
+        ({player, possibleActions} = this.rollPossibleActions());
         break;
       case TurnPhase.BUY:
-        possibleActions = this.buyPossibleActions();
+        ({player, possibleActions} = this.buyPossibleActions());
+        break;
+      case TurnPhase.AUCTION:
+        ({player, possibleActions} = this.auctionPossibleActions());
         break;
       case TurnPhase.POST_ROLL:
-        possibleActions = this.postRollPossibleActions();
+        ({player, possibleActions} = this.postRollPossibleActions());
         break;
     }
 
-    return possibleActions;
+    return {player, possibleActions};
   }
 
   preRollPossibleActions() {
@@ -773,7 +841,7 @@ class MonopolyGame {
           possibleActions.push(PlayerAction.USE_JAIL_CARD);
       }
     }
-    return possibleActions;
+    return {player, possibleActions};
   }
 
   rollPossibleActions() {
@@ -792,7 +860,7 @@ class MonopolyGame {
       possibleActions.push(PlayerAction.NEXT_PHASE);
     }
 
-    return possibleActions;
+    return {player, possibleActions};
   }
 
   buyPossibleActions() {
@@ -810,7 +878,24 @@ class MonopolyGame {
       possibleActions.push(PlayerAction.NEXT_PHASE);
     }
 
-    return possibleActions;
+    return {player, possibleActions};
+  }
+
+  auctionPossibleActions() {
+    let auctionData = this.turnAuctionData;
+    let possibleActions = [];
+    let player = this.ingamePlayers[auctionData.currentBiddingPlayerIndex];
+    if (auctionData.auctionOver) {
+      possibleActions.push(PlayerAction.NEXT_PHASE);
+    }
+    else {
+      if (player.money >= auctionData.currentPrice + AUCTION_INCREMENT) {
+          possibleActions.push(PlayerAction.BID);
+      }
+      possibleActions.push(PlayerAction.ABSTAIN);
+    }
+
+    return {player, possibleActions};
   }
 
   postRollPossibleActions() {
@@ -822,13 +907,12 @@ class MonopolyGame {
       PlayerAction.DEVELOP
     ];
 
-    return possibleActions;
+    return {player, possibleActions};
   }
 
   processPhase() {
-    let player = this.ingamePlayers[this.currentPlayerIndex];
-    let possibleActions = this.possibleActionsForPhase(this.currentPhase);
-    //console.log('process phase', possibleActions);
+    //let player = this.ingamePlayers[this.currentPlayerIndex];
+    let {player, possibleActions} = this.possibleActionsForPhase(this.currentPhase);
     if (possibleActions.every((a) => a == TurnPhase.NEXT_PHASE)) {
       return {
         phase: this.currentPhase,
@@ -865,7 +949,7 @@ class MonopolyGame {
   handleAIAction(playerId, action) {
     let player = this.getPlayerById(playerId);
     let playerAction = action.action;
-    let possibleActions = this.possibleActionsForPhase(this.currentPhase);
+    let possibleActions = this.possibleActionsForPhase(this.currentPhase).possibleActions;
     if (!possibleActions.includes(playerAction)) {
       throw new InvalidMoveError('Move ' + playerAction.name + ' is not possible for phase ' + this.currentPhase + '!');
     }
@@ -883,6 +967,16 @@ class MonopolyGame {
       case PlayerAction.BUY:
         tileId = action.tileId;
         this.buy(player.id, tileId);
+        break;
+      case PlayerAction.AUCTION:
+        tileId = action.tileId;
+        this.initAuction(player.id, tileId);
+        break;
+      case PlayerAction.BID:
+        this.auctionBid(player.id);
+        break;
+      case PlayerAction.ABSTAIN:
+        this.auctionAbstain(player.id);
         break;
       case PlayerAction.ROLL:
         this.roll(player.id);
@@ -920,6 +1014,10 @@ class MonopolyGame {
       case PlayerAction.BUY:
         tileId = input.tileId;
         this.buy(player.id, tileId);
+        break;
+      case PlayerAction.AUCTION:
+        tileId = action.tileId;
+        this.initAuction(player.id, tileId);
         break;
       case PlayerAction.ROLL:
         this.roll(player.id);
@@ -964,7 +1062,12 @@ class MonopolyGame {
           nextPhase = TurnPhase.BUY;
           break;
         case TurnPhase.BUY:
-          if (this.turnPlayerData.hasRolled
+        case TurnPhase.AUCTION:
+          if (this.turnPlayerData.auctionRequested) {
+            nextPhase = TurnPhase.AUCTION;
+            this.turnPlayerData.auctionRequested = false;
+          }
+          else if (this.turnPlayerData.hasRolled
             && this.turnPlayerData.doubleRolls > 0
             && this.turnPlayerData.doubleRolls < MAX_DOUBLE_ROLLS
             ) {

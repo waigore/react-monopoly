@@ -16,6 +16,8 @@ PlayerAction.initEnum([
   'SELL',
   'BUY',
   'AUCTION',
+  'BID',
+  'ABSTAIN',
   'END_TURN',
   'FORFEIT'
 ])
