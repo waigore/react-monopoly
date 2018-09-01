@@ -94,7 +94,7 @@ function shuffle(a) {
 }
 
 class MonopolyGame {
-  constructor({players}) {
+  constructor({players, shuffleDecks = true, diceRollFunc = null}) {
     this.board = [];
     this.ingamePlayers = [];
     this.chanceCardDeck = [];
@@ -104,6 +104,7 @@ class MonopolyGame {
     this.ee = new EventEmitter();
     this.housesAvailable = MAX_HOUSES;
     this.hotelsAvailable = MAX_HOTELS;
+    this.diceRollFunc = diceRollFunc;
 
     tileData.forEach((list, listIndex) => {
       list.forEach((tile, tileIndex) => {
@@ -143,7 +144,10 @@ class MonopolyGame {
         deckName: 'CHANCE'
       });
     });
-    shuffle(this.chanceCardDeck);
+    if (shuffleDecks) {
+      shuffle(this.chanceCardDeck);
+    }
+
 
     ukCommChestCardData.forEach((card, cardIndex) => {
       this.commChestCardDeck.push({
@@ -151,7 +155,9 @@ class MonopolyGame {
         deckName: 'COMM_CHEST'
       });
     });
-    shuffle(this.commChestCardDeck);
+    if (shuffleDecks) {
+      shuffle(this.commChestCardDeck);
+    }
   }
 
   addEventListener(eventName, callback) {
@@ -258,6 +264,10 @@ class MonopolyGame {
   }
 
   rollDice(die1=null, die2=null) {
+    if (this.diceRollFunc != null) {
+      ({die1, die2} = this.diceRollFunc());
+      return {die1, die2};
+    }
     if (die1 == null) {
       die1 = Math.floor(Math.random()*6)+1;
     }
@@ -647,6 +657,10 @@ class MonopolyGame {
     return playerIndex;
   }
 
+  getPlayerByName(name) {
+    return this.ingamePlayers.filter(p => p.info.name == name)[0];
+  }
+
   getPlayerById(playerId) {
     return this.ingamePlayers.filter(p => p.id == playerId)[0];
   }
@@ -794,6 +808,7 @@ class MonopolyGame {
 
     this.gameState = GameState.RUNNING;
     this.currentPhase = TurnPhase.PRE_ROLL;
+    this.turnCounter = 1;
     this.initTurnData();
     this.emitGameStarted();
 
@@ -1044,6 +1059,28 @@ class MonopolyGame {
     }
   }
 
+  runTurns(turns = 1) {
+    if (turns < 1) {
+      throw new InvalidOperationError("Must run for at least 1 turn!");
+    }
+
+    let phaseOutput;
+    let currTurnCounter = this.turnCounter;
+    let upToTurn = currTurnCounter + turns;
+
+    while (currTurnCounter < upToTurn) {
+      phaseOutput = this.run();
+
+      if (phaseOutput.message == GameMessageType.HUMAN_INPUT_REQUIRED) {
+        return phaseOutput;
+      }
+
+      currTurnCounter = this.turnCounter;
+    }
+
+    return phaseOutput;
+  }
+
   run(humanInput = null) {
     let phaseOutput;
     let player = this.ingamePlayers[this.currentPlayerIndex];
@@ -1088,6 +1125,7 @@ class MonopolyGame {
       if (nextPhase == null) {
         this.emitTurnEnded(player.id);
         this.currentPlayerIndex++;
+        this.turnCounter++;
         if (this.currentPlayerIndex >= this.ingamePlayers.length) {
           this.currentPlayerIndex = 0;
         }
