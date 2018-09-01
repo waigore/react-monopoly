@@ -283,6 +283,7 @@ class MonopolyGame {
     this.turnPlayerData.hasRolled = true;
 
     let {die1, die2} = this.rollDice();
+    player.lastRoll = {die1, die2};
     if (die1 == die2) {
       this.turnPlayerData.doubleRolls++;
       if (this.turnPlayerData.doubleRolls >= MAX_DOUBLE_ROLLS)
@@ -304,7 +305,7 @@ class MonopolyGame {
           //player is out of jail! yay!
           player.inJail = false;
           player.inJailTurns = 0;
-          this.turnPlayerData.releasedFromJail = true;
+          this.turnPlayerData.doubleRolls = 0;
           this.emitPlayerOutOfJail(player.id, 'double roll');
         }
         else
@@ -723,19 +724,24 @@ class MonopolyGame {
     return 10;
   }
 
-  setupGame() {
-    this.determinePlayerOrder();
+  setupGame({randomizePlayerOrder = true}) {
+    this.determinePlayerOrder({randomize: randomizePlayerOrder});
 
     this.currentPlayerIndex = 0;
     this.gameState = GameState.READY;
     this.emitGameReady();
   }
 
-  determinePlayerOrder() {
-    this.ingamePlayers.forEach(player => {
-      let {die1, die2} = this.rollDice();
-      player.lastRoll = {die1, die2};
-      player.rollSequence = die1 + die2;
+  determinePlayerOrder({randomize}) {
+    this.ingamePlayers.forEach((player, index) => {
+      if (randomize) {
+        let {die1, die2} = this.rollDice();
+        player.lastRoll = {die1, die2};
+        player.rollSequence = die1 + die2;
+      }
+      else {
+        player.rollSequence = 100-index;
+      }
       player.onTileId = this.board[0].id;
     });
 
@@ -744,7 +750,6 @@ class MonopolyGame {
 
   initTurnData() {
     this.turnPlayerData = {
-      releasedFromJail: false,
       hasRolled: false,
       doubleRolls: 0,
       outstandingRent: 0,
@@ -865,8 +870,7 @@ class MonopolyGame {
     if (
         !this.turnPlayerData.hasRolled
         || (this.turnPlayerData.doubleRolls > 0
-            && this.turnPlayerData.doubleRolls < MAX_DOUBLE_ROLLS
-            && !this.turnPlayerData.releasedFromJail)
+            && this.turnPlayerData.doubleRolls < MAX_DOUBLE_ROLLS)
       )
     {
       possibleActions.push(PlayerAction.ROLL);
@@ -1086,6 +1090,8 @@ class MonopolyGame {
     let player = this.ingamePlayers[this.currentPlayerIndex];
     let nextPhase = this.currentPhase;
 
+    //console.log('run: currentPhase=', this.currentPhase.name);
+
     phaseOutput = humanInput ?
       this.handleHumanInput(playerId, humanInput) :
       this.processPhase();
@@ -1107,6 +1113,7 @@ class MonopolyGame {
           else if (this.turnPlayerData.hasRolled
             && this.turnPlayerData.doubleRolls > 0
             && this.turnPlayerData.doubleRolls < MAX_DOUBLE_ROLLS
+            && !player.inJail
             ) {
             nextPhase = TurnPhase.ROLL;
           }

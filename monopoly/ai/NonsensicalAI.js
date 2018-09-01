@@ -50,7 +50,7 @@ class NonsensicalAI {
   }
 
   considerAction(game, player, currentPhase, possibleActions) {
-    console.log(player.info.name, ': my possible actions are', possibleActions.map(a => a.name));
+    console.log(player.info.name, currentPhase.name, ': my possible actions are', possibleActions.map(a => a.name));
     if (currentPhase == TurnPhase.PRE_ROLL) {
       return this.considerPreRoll(game, player, possibleActions);
     }
