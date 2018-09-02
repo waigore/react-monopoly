@@ -189,7 +189,7 @@ describe('Drawing Community Chest cards', () => {
     assert.equal(tile.info.type, BoardTileType.COMM_CHEST);
     assert.equal(player.inJail, false);
     assert.equal(player.cards.some(c => c.info.code == 'get_out_of_jail'), true);
-  })
+  });
 
   it('should draw a Go to Jail card and go to jail', () => {
 
@@ -203,5 +203,5 @@ describe('Drawing Community Chest cards', () => {
     assert.equal(tile.info.type, BoardTileType.JAIL);
     assert.equal(player.inJail, true);
     assert.equal(player.inJailTurns, 0);
-  })
-})
+  });
+});

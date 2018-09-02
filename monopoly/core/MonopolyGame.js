@@ -49,6 +49,7 @@ class GameMessageType extends Enum {}
 GameMessageType.initEnum([
   'PHASE_DONE',
   'HUMAN_INPUT_REQUIRED',
+  'AI_ACTION_REQUIRED',
   'AI_ACTION_PROCESSED'
 ]);
 
@@ -546,7 +547,7 @@ class MonopolyGame {
     this.emitPlayerAction(player.id, PlayerAction.SELL, {tile});
   }
 
-  buy(playerId, tileId) {
+  buy(playerId, tileId, buyingPrice = null) {
     let tile = this.getTileById(tileId);
     let player = this.getPlayerById(playerId);
     if (!tile.info.isBuyable())
@@ -558,7 +559,7 @@ class MonopolyGame {
       throw new InvalidMoveError(tile.info.name + " is owned by player " + this.getPlayerById(tile.ownedPlayerId).info.name + "!");
     }
 
-    let price = tile.info.price;
+    let price = buyingPrice || tile.info.price;
     if (player.money < price)
     {
       throw new InvalidMoveError(player.info.name + " does not have enough money for tile!");
@@ -702,7 +703,7 @@ class MonopolyGame {
 
   getPlayerIndex(playerId) {
     let playerIndex = null;
-    this.inGamePlayers.forEach((p, index) => {
+    this.ingamePlayers.forEach((p, index) => {
       if (p.id == playerId) {
         playerIndex = index;
       }
@@ -787,7 +788,7 @@ class MonopolyGame {
     this.emitGameReady();
   }
 
-  determinePlayerOrder({randomize}) {
+  determinePlayerOrder({randomize = true}) {
     this.ingamePlayers.forEach((player, index) => {
       if (randomize) {
         let {die1, die2} = this.rollDice();
@@ -819,7 +820,7 @@ class MonopolyGame {
       lastBiddingPlayerIndex: null,
       tileId,
       currentPrice: 0,
-      abstrainCount: 0,
+      abstainCount: 0,
       auctionOver: false
     };
   }
@@ -829,7 +830,7 @@ class MonopolyGame {
 
     auctionData.lastBiddingPlayerIndex =
         auctionData.currentBiddingPlayerIndex;
-    auctionData.currentPrice += increment;
+    auctionData.currentPrice = auctionData.currentPrice + increment;
     auctionData.abstainCount = 0;
 
     auctionData.currentBiddingPlayerIndex += 1;
@@ -845,7 +846,7 @@ class MonopolyGame {
         && auctionData.lastBiddingPlayerIndex != null ) {
       auctionData.auctionOver = true;
       let successfulPlayer = this.ingamePlayers[auctionData.lastBiddingPlayerIndex];
-      this.buy(successfulPlayer.id, auctionData.tileId);
+      this.buy(successfulPlayer.id, auctionData.tileId, auctionData.currentPrice);
       return;
     }
     else if (auctionData.abstainCount >= this.ingamePlayers.length-1) {
@@ -1011,11 +1012,21 @@ class MonopolyGame {
         throw new InvalidMoveError('AI made an illegal move!');
       }
       aiActions.forEach(action => this.handleAIAction(player.id, action));
-      return {
-        phase: this.currentPhase,
-        message: GameMessageType.PHASE_DONE,
-        player
+      if (this.currentPhase == TurnPhase.AUCTION && !this.turnAuctionData.auctionOver) {
+        return {
+          phase: this.currentPhase,
+          message: GameMessageType.AI_ACTION_REQUIRED,
+          player
+        };
       }
+      else {
+        return {
+          phase: this.currentPhase,
+          message: GameMessageType.PHASE_DONE,
+          player
+        }
+      }
+
     }
   }
 
@@ -1046,7 +1057,7 @@ class MonopolyGame {
         this.initAuction(player.id, tileId);
         break;
       case PlayerAction.BID:
-        this.auctionBid(player.id);
+        this.auctionBid(player.id, AUCTION_INCREMENT);
         break;
       case PlayerAction.ABSTAIN:
         this.auctionAbstain(player.id);
@@ -1094,6 +1105,12 @@ class MonopolyGame {
       case PlayerAction.AUCTION:
         tileId = action.tileId;
         this.initAuction(player.id, tileId);
+        break;
+      case PlayerAction.BID:
+        this.auctionBid(player.id, AUCTION_INCREMENT);
+        break;
+      case PlayerAction.ABSTAIN:
+        this.auctionAbstain(player.id);
         break;
       case PlayerAction.ROLL:
         this.roll(player.id);

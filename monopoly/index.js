@@ -122,7 +122,7 @@ game.addEventListener(GameEventType.PLAYER_DREW_CARD, (args) => {
   phaseLog('Player', player.info.name, 'drew card:', card.info.description);
 })
 
-game.setupGame();
+game.setupGame({randomizePlayerOrder: false});
 game.startGame();
 
 var phaseOutput;
