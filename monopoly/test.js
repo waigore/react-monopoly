@@ -143,3 +143,65 @@ describe('Going to jail', () => {
     assert.equal(player.inJailTurns, 0);
   });
 });
+
+describe('Drawing Community Chest cards', () => {
+  var roller = simpleDiceRoller([
+    {die1: 2, die2: 0}, //not possible in real monopoly!
+  ]);
+  var rollFunc = () => roller.next().value;
+  var game = new MonopolyGame({players, shuffleDecks: false, diceRollFunc: rollFunc});
+  game.setupGame({randomizePlayerOrder: false});
+  game.startGame();
+
+  it('should draw an Advance to Go card and advance to Go', () => {
+    let phaseOutput = game.runTurns();
+    let player = phaseOutput.player;
+    let tile = game.getTileById(player.onTileId);
+
+    assert.equal(player.info.name, 'Player 1');
+    assert.equal(tile.info.type, BoardTileType.GO);
+    assert.equal(player.money, 1700);
+    assert.equal(game.commChestCardDeck[game.commChestCardDeck.length-1].info.code, 'adv_to_go');
+  });
+
+  it('should draw a Bank error card and gain $200', () => {
+    let phaseOutput = game.runTurns();
+    let player = phaseOutput.player;
+    let tile = game.getTileById(player.onTileId);
+
+    assert.equal(player.info.name, 'Player 2');
+    assert.equal(tile.info.type, BoardTileType.COMM_CHEST);
+    assert.equal(player.money, 1700);
+    assert.equal(game.commChestCardDeck[game.commChestCardDeck.length-1].info.code, 'bank_error');
+  });
+
+  it('should draw a Get out of jail free card', () => {
+    game.drawCommChestCard(null);
+    game.drawCommChestCard(null);
+
+    assert.equal(game.commChestCardDeck[0].info.code, 'get_out_of_jail');
+
+    let phaseOutput = game.runTurns();
+    let player = phaseOutput.player;
+    let tile = game.getTileById(player.onTileId);
+
+    assert.equal(player.info.name, 'Player 3');
+    assert.equal(tile.info.type, BoardTileType.COMM_CHEST);
+    assert.equal(player.inJail, false);
+    assert.equal(player.cards.some(c => c.info.code == 'get_out_of_jail'), true);
+  })
+
+  it('should draw a Go to Jail card and go to jail', () => {
+
+    assert.equal(game.commChestCardDeck[0].info.code, 'go_to_jail');
+
+    let phaseOutput = game.runTurns();
+    let player = phaseOutput.player;
+    let tile = game.getTileById(player.onTileId);
+
+    assert.equal(player.info.name, 'Player 4');
+    assert.equal(tile.info.type, BoardTileType.JAIL);
+    assert.equal(player.inJail, true);
+    assert.equal(player.inJailTurns, 0);
+  })
+})

@@ -7,12 +7,13 @@ CardType.initEnum([
 ]);
 
 class MonopolyCard {
-  constructor({type, name, code, description, effect}) {
+  constructor({type, name, code, description, effect, keepable = false}) {
     this.type = type;
     this.name = name;
     this.code = code;
     this.description = description;
     this.effect = effect;
+    this.keepable = keepable;
   }
 }
 

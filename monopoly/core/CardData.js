@@ -102,8 +102,8 @@ const ukChanceCardData = [
     code: 'get_out_of_jail',
     description: 'Get out of jail free. This card may be kept until needed, or traded/sold.',
     effect: (game, player) => {
-      player.getOutOfJailCard = true;
     },
+    keepable: true
   }),
   chanceCard({
     name: 'Go back 3 spaces',
@@ -234,6 +234,7 @@ const ukCommChestCardData = [
     description: 'Get out of jail free. This card may be kept until needed, or traded/sold.',
     effect: (game, player) => {
     },
+    keepable: true
   }),
   commChestCard({
     name: 'Go to jail',

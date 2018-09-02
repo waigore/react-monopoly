@@ -4,6 +4,7 @@ import EventEmitter from 'wolfy87-eventemitter';
 import tileData from './BoardData';
 import { ukChanceCardData, ukCommChestCardData } from './CardData';
 import { BoardTileType } from './BoardTile';
+import { CardType } from './MonopolyCard';
 import { PlayerType, Player } from './Player';
 import PlayerAction from './PlayerAction';
 import TurnPhase from './TurnPhase';
@@ -36,6 +37,13 @@ class InvalidOperationError extends Error {
     this.name = 'InvalidOperationError';
   }
 }
+
+class JailReleaseMethod extends Enum {}
+JailReleaseMethod.initEnum([
+  'ROLLED_DOUBLES',
+  'PAID_FINE',
+  'USED_JAIL_CARD'
+]);
 
 class GameMessageType extends Enum {}
 GameMessageType.initEnum([
@@ -133,7 +141,7 @@ class MonopolyGame {
         rollSequence: 0,
         inJail: false,
         inJailTurns: 0,
-        getOutOfJailCard: false,
+        cards: [],
         money: 1500
       });
     });
@@ -249,9 +257,18 @@ class MonopolyGame {
 
   drawCardFromDeck(playerId, deck) {
     let card = deck.shift();
-    this.turnPlayerData.drawnCard = card;
-    deck.push(card);
-    this.emitPlayerDrewCard(playerId, card);
+
+    if (card.info.keepable && playerId != null) {
+      let player = this.getPlayerById(playerId);
+      player.cards.push(card);
+    }
+    else {
+      deck.push(card);
+    }
+
+    if (playerId != null) {
+      this.emitPlayerDrewCard(playerId, card);
+    }
     return card;
   }
 
@@ -303,10 +320,12 @@ class MonopolyGame {
         if (die1 == die2)
         {
           //player is out of jail! yay!
-          player.inJail = false;
+          /*player.inJail = false;
           player.inJailTurns = 0;
           this.turnPlayerData.doubleRolls = 0;
           this.emitPlayerOutOfJail(player.id, 'double roll');
+          */
+          this.getOutOfJail(playerId, JailReleaseMethod.ROLLED_DOUBLES);
         }
         else
         {
@@ -320,10 +339,13 @@ class MonopolyGame {
       {
         //player has been in jail for at least 3 turns. Make them pay a fine
         //and force them out
+        /*
         player.money -= JAIL_FINE;
         player.inJail = false;
         player.inJailTurns = 0;
         this.emitPlayerOutOfJail(player.id, MAX_JAIL_TURNS + ' turns up');
+        */
+        this.getOutOfJail(player.id, JailReleaseMethod.PAID_FINE);
       }
     }
 
@@ -597,6 +619,39 @@ class MonopolyGame {
     this.emitPlayerInJail(player.id, player.inJailTurns);
   }
 
+  getOutOfJail(playerId, method) {
+    let player = this.getPlayerById(playerId);
+
+    if (method == JailReleaseMethod.ROLLED_DOUBLES) {
+      this.turnPlayerData.doubleRolls = 0;
+    }
+    else if (method == JailReleaseMethod.PAID_FINE) {
+      player.money -= JAIL_FINE;
+    }
+    else if (method == JailReleaseMethod.USED_JAIL_CARD) {
+      let index = player.cards.map(c => c.info.code).indexOf('get_out_of_jail');
+      if (index == -1) {
+        throw new InvalidOperationError("Player attempted to use Get Out Of Jail Card but has no such card!");
+      }
+
+      let jailCard = player.cards.splice(index, 1)[0];
+      if (jailCard.type == CardType.CHANCE) {
+        this.chanceCardDeck.push(jailCard);
+      }
+      else {
+        this.commChestCardDeck.push(jailCard);
+      }
+    }
+    else {
+      throw new InvalidOperationError("No such jail release method:" + method + "!");
+    }
+
+    player.inJail = false;
+    player.inJailTurns = 0;
+
+    this.emitPlayerOutOfJail(player.id, method);
+  }
+
   /* Clockwise distance i.e. the distance players travel if they
   go the usual way on the board */
   calcTileDistance(tile1Id, tile2Id) {
@@ -753,8 +808,7 @@ class MonopolyGame {
       hasRolled: false,
       doubleRolls: 0,
       outstandingRent: 0,
-      auctionRequested: false,
-      drawnCard: null
+      auctionRequested: false
     };
   }
 
@@ -857,7 +911,7 @@ class MonopolyGame {
       if (player.money >= JAIL_FINE) {
           possibleActions.push(PlayerAction.PAY_JAIL_FINE);
       }
-      if (player.getOutOfJailCard) {
+      if (player.cards.some(c => c.info.code == 'get_out_of_jail')) {
           possibleActions.push(PlayerAction.USE_JAIL_CARD);
       }
     }
@@ -996,6 +1050,9 @@ class MonopolyGame {
         break;
       case PlayerAction.ABSTAIN:
         this.auctionAbstain(player.id);
+        break;
+      case PlayerAction.PAY_JAIL_FINE:
+        this.getOutOfJail(player.id, JailReleaseMethod.PAID_FINE);
         break;
       case PlayerAction.ROLL:
         this.roll(player.id);
