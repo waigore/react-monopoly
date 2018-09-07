@@ -809,8 +809,65 @@ class MonopolyGame {
       hasRolled: false,
       doubleRolls: 0,
       outstandingRent: 0,
-      auctionRequested: false
+      auctionRequested: false,
+      tradeRequested: false
     };
+  }
+
+  initTrade(player1Id, player2Id, player1Offer, player2Offer) {
+    this.turnPlayerData.tradeRequested = true;
+    this.turnTradeData = {
+      currentPartyId: player1Id,
+      otherPartyId: player2Id,
+      offers: {
+        [player1Id]: {
+          properties: player1Offer.properties,
+          money: player1Offer.money,
+          cards: player1Offer.cards,
+          accepted: false
+        },
+        [player2Id]: {
+          properties: player2Offer.properties,
+          money: player2Offer.money,
+          cards: player2Offer.cards,
+          accepted: false
+        }
+      },
+      tradeOver: false
+    };
+  }
+
+  endTrade() {
+    let turnTradeData = this.turnTradeData;
+    let currentParty = this.getPlayerById(turnTradeData.currentPartyId);
+    let otherParty = this.getPlayerById(turnTradeData.otherPartyId);
+    turnTradeData.tradeOver = true;
+
+    turnTradeData.offers[turnTradeData.currentPartyId].properties.forEach(p => {
+      p.ownedPlayerId = turnTradeData.otherPartyId;
+      if (p.mortgaged) {
+        otherParty.money -= p.info.mortgageValue;
+      }
+    });
+    otherParty.money += turnTradeData.offers[turnTradeData.currentPartyId].money;
+
+    turnTradeData.offers[turnTradeData.otherPartyId].properties.forEach(p => {
+      p.ownedPlayerId = turnTradeData.currentPartyId;
+      if (p.mortgaged) {
+        currentParty.money -= p.info.mortgageValue;
+      }
+    });
+    currentParty.money += turnTradeData.offers[turnTradeData.otherPartyId].money;
+
+    //TODO cards??
+  }
+
+  tradeAccept(playerId) {
+    let turnTradeData = this.turnTradeData;
+    turnTradeData.offers[playerId].accepted = true;
+    if (turnTradeData.offers[turnTradeData.otherPartyId].accepted) {
+      //end trade
+    }
   }
 
   initAuction(playerId, tileId) {
